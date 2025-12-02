@@ -3,6 +3,7 @@ package resolver
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -46,7 +47,7 @@ func NormalizeSelector(selector string, prFlag int) (string, error) {
 func Resolve(selector, repoFlag, host string) (Identity, error) {
 	selector = strings.TrimSpace(selector)
 	repoFlag = strings.TrimSpace(repoFlag)
-	host = defaultHost(host)
+	host = sanitizeHost(host)
 
 	if selector == "" {
 		return Identity{}, errors.New("empty selector")
@@ -73,11 +74,7 @@ func Resolve(selector, repoFlag, host string) (Identity, error) {
 }
 
 func defaultHost(host string) string {
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return "github.com"
-	}
-	return host
+	return sanitizeHost(host)
 }
 
 func parsePullURL(raw string) (Identity, error) {
@@ -96,7 +93,7 @@ func parsePullURL(raw string) (Identity, error) {
 	return Identity{
 		Owner:  matches[1],
 		Repo:   matches[2],
-		Host:   defaultHost(u.Hostname()),
+		Host:   sanitizeHost(u.Host),
 		Number: number,
 	}, nil
 }
@@ -138,4 +135,37 @@ func splitRepo(repoFlag string) (string, string, error) {
 		return "", "", errors.New("expected owner/repo")
 	}
 	return parts[0], parts[1], nil
+}
+
+func sanitizeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "github.com"
+	}
+
+	lower := strings.ToLower(raw)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			raw = u.Host
+		} else {
+			raw = strings.TrimPrefix(strings.TrimPrefix(lower, "http://"), "https://")
+		}
+	}
+
+	if strings.Contains(raw, "/") {
+		raw = strings.SplitN(raw, "/", 2)[0]
+	}
+
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	} else if idx := strings.Index(raw, ":"); idx >= 0 {
+		raw = raw[:idx]
+	}
+
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "github.com"
+	}
+
+	return strings.ToLower(raw)
 }

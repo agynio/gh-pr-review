@@ -51,90 +51,77 @@ type ActionResult struct {
 	Changed    bool   `json:"changed"`
 }
 
+type pullContext struct {
+	identity resolver.Identity
+	nodeID   string
+}
+
 // List fetches review threads for the provided pull request, applies filters, and returns sorted results.
 func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error) {
-	var (
-		allThreads []Thread
-		after      *string
-	)
+	ctx, err := s.loadPullContext(pr)
+	if err != nil {
+		return nil, err
+	}
 
-	for {
-		resp, err := s.fetchThreads(pr, after)
-		if err != nil {
-			return nil, err
+	nodes, err := s.collectThreads(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var allThreads []Thread
+
+	for _, node := range nodes {
+		if opts.OnlyUnresolved && node.IsResolved {
+			continue
 		}
 
-		if resp.Repository == nil {
-			return nil, fmt.Errorf("repository %s/%s not found", pr.Owner, pr.Repo)
-		}
-		if resp.Repository.PullRequest == nil {
-			return nil, fmt.Errorf("pull request %d not found", pr.Number)
-		}
+		mine := node.ViewerCanResolve || node.ViewerCanUnresolve
+		var (
+			latest   time.Time
+			hasStamp bool
+		)
 
-		threads := resp.Repository.PullRequest.ReviewThreads
-		if threads == nil {
-			break
-		}
-
-		for _, node := range threads.Nodes {
-			if opts.OnlyUnresolved && node.IsResolved {
-				continue
+		for _, comment := range node.Comments.Nodes {
+			if comment.ViewerDidAuthor {
+				mine = true
 			}
-
-			mine := node.ViewerCanResolve
-			var (
-				latest   time.Time
-				hasStamp bool
-			)
-
-			for _, comment := range node.Comments.Nodes {
-				if comment.ViewerDidAuthor {
-					mine = true
-				}
-				if !hasStamp || comment.UpdatedAt.After(latest) {
-					latest = comment.UpdatedAt
-					hasStamp = true
-				}
+			if !hasStamp || comment.UpdatedAt.After(latest) {
+				latest = comment.UpdatedAt
+				hasStamp = true
 			}
-
-			if opts.MineOnly && !mine {
-				continue
-			}
-
-			var resolvedBy *string
-			if node.ResolvedBy != nil && node.ResolvedBy.Login != "" {
-				login := node.ResolvedBy.Login
-				resolvedBy = &login
-			}
-
-			var updatedAt *time.Time
-			if hasStamp {
-				ts := latest
-				updatedAt = &ts
-			}
-
-			var linePtr *int
-			if node.Line != nil {
-				value := *node.Line
-				linePtr = &value
-			}
-
-			allThreads = append(allThreads, Thread{
-				ThreadID:   node.ID,
-				IsResolved: node.IsResolved,
-				ResolvedBy: resolvedBy,
-				UpdatedAt:  updatedAt,
-				Path:       node.Path,
-				Line:       linePtr,
-				IsOutdated: node.IsOutdated,
-			})
 		}
 
-		if threads.PageInfo == nil || !threads.PageInfo.HasNextPage {
-			break
+		if opts.MineOnly && !mine {
+			continue
 		}
-		cursor := threads.PageInfo.EndCursor
-		after = &cursor
+
+		var resolvedBy *string
+		if node.ResolvedBy != nil && node.ResolvedBy.Login != "" {
+			login := node.ResolvedBy.Login
+			resolvedBy = &login
+		}
+
+		var updatedAt *time.Time
+		if hasStamp {
+			ts := latest
+			updatedAt = &ts
+		}
+
+		var linePtr *int
+		if node.Line != nil {
+			value := *node.Line
+			linePtr = &value
+		}
+
+		allThreads = append(allThreads, Thread{
+			ThreadID:   node.ID,
+			IsResolved: node.IsResolved,
+			ResolvedBy: resolvedBy,
+			UpdatedAt:  updatedAt,
+			Path:       node.Path,
+			Line:       linePtr,
+			IsOutdated: node.IsOutdated,
+		})
 	}
 
 	sort.SliceStable(allThreads, func(i, j int) bool {
@@ -170,17 +157,15 @@ func (s *Service) Unresolve(pr resolver.Identity, opts ActionOptions) (ActionRes
 }
 
 type threadsQueryResponse struct {
-	Repository *struct {
-		PullRequest *struct {
-			ReviewThreads *struct {
-				Nodes    []threadNode `json:"nodes"`
-				PageInfo *struct {
-					HasNextPage bool   `json:"hasNextPage"`
-					EndCursor   string `json:"endCursor"`
-				} `json:"pageInfo"`
-			} `json:"reviewThreads"`
-		} `json:"pullRequest"`
-	} `json:"repository"`
+	Node *struct {
+		ReviewThreads *struct {
+			Nodes    []threadNode `json:"nodes"`
+			PageInfo *struct {
+				HasNextPage bool   `json:"hasNextPage"`
+				EndCursor   string `json:"endCursor"`
+			} `json:"pageInfo"`
+		} `json:"reviewThreads"`
+	} `json:"node"`
 }
 
 type threadNode struct {
@@ -198,15 +183,14 @@ type threadNode struct {
 		Nodes []struct {
 			ViewerDidAuthor bool      `json:"viewerDidAuthor"`
 			UpdatedAt       time.Time `json:"updatedAt"`
+			DatabaseID      int64     `json:"databaseId"`
 		} `json:"nodes"`
 	} `json:"comments"`
 }
 
-func (s *Service) fetchThreads(pr resolver.Identity, after *string) (*threadsQueryResponse, error) {
+func (s *Service) fetchThreads(nodeID string, after *string) (*threadsQueryResponse, error) {
 	variables := map[string]interface{}{
-		"owner":  pr.Owner,
-		"name":   pr.Repo,
-		"number": pr.Number,
+		"id": nodeID,
 	}
 	if after != nil {
 		variables["after"] = *after
@@ -219,13 +203,88 @@ func (s *Service) fetchThreads(pr resolver.Identity, after *string) (*threadsQue
 	return &resp, nil
 }
 
+func (s *Service) collectThreads(ctx pullContext) ([]threadNode, error) {
+	var (
+		allThreads []threadNode
+		after      *string
+	)
+
+	for {
+		resp, err := s.fetchThreads(ctx.nodeID, after)
+		if err != nil {
+			return nil, err
+		}
+
+		node := resp.Node
+		if node == nil || node.ReviewThreads == nil {
+			return nil, fmt.Errorf("pull request %d not found on %s", ctx.identity.Number, ctx.identity.Host)
+		}
+
+		threads := node.ReviewThreads
+		allThreads = append(allThreads, threads.Nodes...)
+
+		if threads.PageInfo == nil || !threads.PageInfo.HasNextPage {
+			break
+		}
+		cursor := threads.PageInfo.EndCursor
+		after = &cursor
+	}
+
+	return allThreads, nil
+}
+
+func (s *Service) canonicalizeIdentity(pr resolver.Identity) (resolver.Identity, error) {
+	var repo struct {
+		FullName string `json:"full_name"`
+	}
+	path := fmt.Sprintf("repos/%s/%s", pr.Owner, pr.Repo)
+	if err := s.API.REST("GET", path, nil, nil, &repo); err != nil {
+		return resolver.Identity{}, fmt.Errorf("repository %s/%s not found on %s: %w", pr.Owner, pr.Repo, pr.Host, err)
+	}
+
+	if repo.FullName != "" {
+		parts := strings.Split(repo.FullName, "/")
+		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+			pr.Owner = parts[0]
+			pr.Repo = parts[1]
+		}
+	}
+
+	return pr, nil
+}
+
+func (s *Service) loadPullContext(pr resolver.Identity) (pullContext, error) {
+	canonical, err := s.canonicalizeIdentity(pr)
+	if err != nil {
+		return pullContext{}, err
+	}
+
+	var pull struct {
+		NodeID string `json:"node_id"`
+	}
+	path := fmt.Sprintf("repos/%s/%s/pulls/%d", canonical.Owner, canonical.Repo, canonical.Number)
+	if err := s.API.REST("GET", path, nil, nil, &pull); err != nil {
+		return pullContext{}, fmt.Errorf("pull request %d not found on %s: %w", canonical.Number, canonical.Host, err)
+	}
+	if strings.TrimSpace(pull.NodeID) == "" {
+		return pullContext{}, fmt.Errorf("pull request %d missing node identifier on %s", canonical.Number, canonical.Host)
+	}
+
+	return pullContext{identity: canonical, nodeID: pull.NodeID}, nil
+}
+
 func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, resolve bool) (ActionResult, error) {
-	threadID, err := s.resolveThreadID(pr, opts)
+	ctx, err := s.loadPullContext(pr)
 	if err != nil {
 		return ActionResult{}, err
 	}
 
-	thread, err := s.fetchThread(threadID)
+	threadID, err := s.resolveThreadID(ctx, opts)
+	if err != nil {
+		return ActionResult{}, err
+	}
+
+	thread, err := s.fetchThread(ctx.identity.Host, threadID)
 	if err != nil {
 		return ActionResult{}, err
 	}
@@ -248,7 +307,7 @@ func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, res
 	return s.performUnresolve(threadID)
 }
 
-func (s *Service) resolveThreadID(pr resolver.Identity, opts ActionOptions) (string, error) {
+func (s *Service) resolveThreadID(ctx pullContext, opts ActionOptions) (string, error) {
 	if opts.ThreadID != "" && opts.CommentID > 0 {
 		return "", errors.New("specify either --thread-id or --comment-id, not both")
 	}
@@ -262,19 +321,39 @@ func (s *Service) resolveThreadID(pr resolver.Identity, opts ActionOptions) (str
 	var comment struct {
 		NodeID string `json:"node_id"`
 	}
-	path := fmt.Sprintf("repos/%s/%s/pulls/comments/%d", pr.Owner, pr.Repo, opts.CommentID)
+	path := fmt.Sprintf("repos/%s/%s/pulls/comments/%d", ctx.identity.Owner, ctx.identity.Repo, opts.CommentID)
 	if err := s.API.REST("GET", path, nil, nil, &comment); err != nil {
-		return "", err
+		return "", fmt.Errorf("comment %d not found on %s: %w", opts.CommentID, ctx.identity.Host, err)
 	}
 	if strings.TrimSpace(comment.NodeID) == "" {
-		return "", fmt.Errorf("comment %d missing node identifier", opts.CommentID)
+		return "", fmt.Errorf("comment %d missing node identifier on %s", opts.CommentID, ctx.identity.Host)
 	}
 
 	threadID, err := s.lookupThreadID(comment.NodeID)
 	if err != nil {
+		if isReviewThreadSchemaError(err) {
+			return s.findThreadByComment(ctx, opts.CommentID)
+		}
 		return "", err
 	}
 	return threadID, nil
+}
+
+func (s *Service) findThreadByComment(ctx pullContext, commentID int64) (string, error) {
+	nodes, err := s.collectThreads(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	for _, node := range nodes {
+		for _, comment := range node.Comments.Nodes {
+			if comment.DatabaseID == commentID {
+				return node.ID, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("comment %d not found in pull request %s/%s#%d on %s", commentID, ctx.identity.Owner, ctx.identity.Repo, ctx.identity.Number, ctx.identity.Host)
 }
 
 func (s *Service) lookupThreadID(commentNodeID string) (string, error) {
@@ -295,7 +374,7 @@ func (s *Service) lookupThreadID(commentNodeID string) (string, error) {
 	return resp.Node.PullRequestReviewThread.ID, nil
 }
 
-func (s *Service) fetchThread(threadID string) (*threadDetails, error) {
+func (s *Service) fetchThread(host, threadID string) (*threadDetails, error) {
 	variables := map[string]interface{}{"id": threadID}
 	var resp struct {
 		Node *threadDetails `json:"node"`
@@ -304,7 +383,7 @@ func (s *Service) fetchThread(threadID string) (*threadDetails, error) {
 		return nil, err
 	}
 	if resp.Node == nil {
-		return nil, fmt.Errorf("thread %s not found", threadID)
+		return nil, fmt.Errorf("thread %s not found on %s", threadID, host)
 	}
 	return resp.Node, nil
 }
@@ -348,10 +427,21 @@ func (s *Service) performUnresolve(threadID string) (ActionResult, error) {
 	return ActionResult{ThreadID: resp.Unresolve.Thread.ID, IsResolved: resp.Unresolve.Thread.IsResolved, Changed: true}, nil
 }
 
+func isReviewThreadSchemaError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "pullrequestreviewthread") {
+		return false
+	}
+	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "doesn't exist") || strings.Contains(msg, "cannot query field")
+}
+
 const listThreadsQuery = `
-query Threads($owner: String!, $name: String!, $number: Int!, $after: String) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
+query Threads($id: ID!, $after: String) {
+  node(id: $id) {
+    ... on PullRequest {
       reviewThreads(first: 100, after: $after) {
         nodes {
           id
@@ -364,6 +454,7 @@ query Threads($owner: String!, $name: String!, $number: Int!, $after: String) {
           resolvedBy { login }
           comments(first: 100) {
             nodes {
+              databaseId
               viewerDidAuthor
               updatedAt
             }

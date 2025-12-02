@@ -18,48 +18,62 @@ func TestThreadsListCommandJSON(t *testing.T) {
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		if method != "GET" {
+			return errors.New("unexpected method")
+		}
+		switch path {
+		case "repos/octo/demo":
+			payload := map[string]interface{}{"full_name": "octo/demo"}
+			return assignJSON(result, payload)
+		case "repos/octo/demo/pulls/5":
+			payload := map[string]interface{}{"node_id": "PR_node"}
+			return assignJSON(result, payload)
+		default:
+			return errors.New("unexpected path")
+		}
+	}
 	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
 		if !strings.Contains(query, "reviewThreads") {
 			return errors.New("unexpected query")
 		}
 		payload := map[string]interface{}{
-			"repository": map[string]interface{}{
-				"pullRequest": map[string]interface{}{
-					"reviewThreads": map[string]interface{}{
-						"nodes": []map[string]interface{}{
-							{
-								"id":                 "T_node",
-								"isResolved":         false,
-								"isOutdated":         false,
-								"path":               "internal/service.go",
-								"line":               27,
-								"viewerCanResolve":   false,
-								"viewerCanUnresolve": true,
-								"comments": map[string]interface{}{
-									"nodes": []map[string]interface{}{
-										{
-											"viewerDidAuthor": true,
-											"updatedAt":       time.Date(2025, 12, 2, 15, 0, 0, 0, time.UTC).Format(time.RFC3339),
-										},
+			"node": map[string]interface{}{
+				"reviewThreads": map[string]interface{}{
+					"nodes": []map[string]interface{}{
+						{
+							"id":                 "T_node",
+							"isResolved":         false,
+							"isOutdated":         false,
+							"path":               "internal/service.go",
+							"line":               27,
+							"viewerCanResolve":   false,
+							"viewerCanUnresolve": true,
+							"comments": map[string]interface{}{
+								"nodes": []map[string]interface{}{
+									{
+										"viewerDidAuthor": true,
+										"updatedAt":       time.Date(2025, 12, 2, 15, 0, 0, 0, time.UTC).Format(time.RFC3339),
+										"databaseId":      101,
 									},
 								},
 							},
-							{
-								"id":                 "T_resolved",
-								"isResolved":         true,
-								"isOutdated":         false,
-								"path":               "ignored.go",
-								"viewerCanResolve":   true,
-								"viewerCanUnresolve": true,
-								"comments": map[string]interface{}{
-									"nodes": []map[string]interface{}{},
-								},
+						},
+						{
+							"id":                 "T_resolved",
+							"isResolved":         true,
+							"isOutdated":         false,
+							"path":               "ignored.go",
+							"viewerCanResolve":   true,
+							"viewerCanUnresolve": true,
+							"comments": map[string]interface{}{
+								"nodes": []map[string]interface{}{},
 							},
 						},
-						"pageInfo": map[string]interface{}{
-							"hasNextPage": false,
-							"endCursor":   "",
-						},
+					},
+					"pageInfo": map[string]interface{}{
+						"hasNextPage": false,
+						"endCursor":   "",
 					},
 				},
 			},
@@ -93,10 +107,19 @@ func TestThreadsResolveCommandByCommentID(t *testing.T) {
 
 	fake := &commandFakeAPI{}
 	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		assert.Equal(t, "GET", method)
-		assert.Equal(t, "repos/octo/demo/pulls/comments/88", path)
-		payload := map[string]interface{}{"node_id": "C_node"}
-		return assignJSON(result, payload)
+		if method != "GET" {
+			return errors.New("unexpected method")
+		}
+		switch path {
+		case "repos/octo/demo":
+			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
+		case "repos/octo/demo/pulls/9":
+			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
+		case "repos/octo/demo/pulls/comments/88":
+			return assignJSON(result, map[string]interface{}{"node_id": "C_node"})
+		default:
+			return errors.New("unexpected path")
+		}
 	}
 	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
 		switch {
@@ -156,6 +179,19 @@ func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		if method != "GET" {
+			return errors.New("unexpected method")
+		}
+		switch path {
+		case "repos/octo/demo":
+			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
+		case "repos/octo/demo/pulls/9":
+			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
+		default:
+			return errors.New("unexpected path")
+		}
+	}
 	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
 		switch {
 		case strings.Contains(query, "ThreadDetails"):

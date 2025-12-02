@@ -152,8 +152,23 @@ func (c *Client) GraphQL(query string, variables map[string]interface{}, result 
 		return nil
 	}
 
-	if err := json.Unmarshal(stdout, result); err != nil {
+	var envelope struct {
+		Data   json.RawMessage   `json:"data"`
+		Errors []json.RawMessage `json:"errors"`
+	}
+	if err := json.Unmarshal(stdout, &envelope); err != nil {
 		return fmt.Errorf("unmarshal graphql response: %w", err)
+	}
+	if len(envelope.Errors) > 0 {
+		return fmt.Errorf("graphql returned errors: %s", strings.TrimSpace(string(stdout)))
+	}
+
+	if len(envelope.Data) == 0 {
+		return json.Unmarshal(stdout, result)
+	}
+
+	if err := json.Unmarshal(envelope.Data, result); err != nil {
+		return fmt.Errorf("unmarshal graphql data: %w", err)
 	}
 	return nil
 }
@@ -161,6 +176,8 @@ func (c *Client) GraphQL(query string, variables map[string]interface{}, result 
 // runGh executes the `gh` CLI command with provided arguments and optional stdin data.
 func runGh(args []string, stdin []byte) ([]byte, string, error) {
 	cmd := exec.Command("gh", args...)
+	// DEBUG LOG
+	// fmt.Fprintf(os.Stderr, "running gh %s\n", strings.Join(args, " "))
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}

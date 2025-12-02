@@ -32,6 +32,18 @@ func TestResolveFullReference(t *testing.T) {
 	assert.Equal(t, Identity{Owner: "octo", Repo: "demo", Host: "github.acme.com", Number: 5}, id)
 }
 
+func TestResolveHostSanitization(t *testing.T) {
+	id, err := Resolve("octo/demo#11", "", "HTTPS://GHE.EXAMPLE.COM:8443/")
+	require.NoError(t, err)
+	assert.Equal(t, "ghe.example.com", id.Host)
+}
+
+func TestResolveURLHostPrecedence(t *testing.T) {
+	id, err := Resolve("https://git.enterprise.local:8443/octo/demo/pull/13", "", "github.com")
+	require.NoError(t, err)
+	assert.Equal(t, Identity{Owner: "octo", Repo: "demo", Host: "git.enterprise.local", Number: 13}, id)
+}
+
 func TestResolveNumberRequiresRepo(t *testing.T) {
 	_, err := Resolve("7", "", "")
 	require.Error(t, err)
