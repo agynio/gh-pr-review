@@ -64,6 +64,33 @@ gh pr-review review --submit \
   owner/repo#42
 ```
 
+### Manage review threads
+
+List threads and filter by resolution state or participation. The command
+requires `--json` to output structured data:
+
+```sh
+# List unresolved threads you can resolve or participated in
+gh pr-review threads list --json --unresolved --mine owner/repo#42
+
+# Include all review threads for a pull request URL
+gh pr-review threads list --json https://github.com/owner/repo/pull/42
+```
+
+Resolve or unresolve threads using either the thread node ID or a REST
+comment identifier:
+
+```sh
+# Resolve by thread node ID
+gh pr-review threads resolve --json --thread-id R_ywDoABC123 owner/repo#42
+
+# Resolve by comment identifier (maps to thread automatically)
+gh pr-review threads resolve --json --comment-id 987654 owner/repo#42
+
+# Reopen a thread
+gh pr-review threads unresolve --json --thread-id R_ywDoABC123 owner/repo#42
+```
+
 All commands accept `-R owner/repo`, pull request URLs, or the `owner/repo#123`
 shorthand and do not require a local git checkout. Authentication and host
 resolution defer to the existing `gh` CLI configuration, including `GH_HOST` for
