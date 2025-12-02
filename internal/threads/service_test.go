@@ -223,6 +223,98 @@ func TestResolveViaCommentID(t *testing.T) {
 	assert.True(t, mutationCalled)
 }
 
+func TestUnresolveRequiresPermission(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			if query == threadDetailsQuery {
+				payload := struct {
+					Node *threadDetails `json:"node"`
+				}{Node: &threadDetails{ID: "T4", IsResolved: true, ViewerCanResolve: true, ViewerCanUnresolve: false}}
+				return assign(result, payload)
+			}
+			return errors.New("unexpected query")
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
+	_, err := svc.Unresolve(identity, ActionOptions{ThreadID: "T4"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot unresolve")
+}
+
+func TestUnresolveNoop(t *testing.T) {
+	svc := &Service{}
+	calls := 0
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			if query == threadDetailsQuery {
+				calls++
+				payload := struct {
+					Node *threadDetails `json:"node"`
+				}{Node: &threadDetails{ID: "T5", IsResolved: false, ViewerCanResolve: true, ViewerCanUnresolve: true}}
+				return assign(result, payload)
+			}
+			return errors.New("unexpected query")
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
+	res, err := svc.Unresolve(identity, ActionOptions{ThreadID: "T5"})
+	require.NoError(t, err)
+	assert.False(t, res.Changed)
+	assert.False(t, res.IsResolved)
+	assert.Equal(t, "T5", res.ThreadID)
+	assert.Equal(t, 1, calls)
+}
+
+func TestUnresolveViaCommentID(t *testing.T) {
+	svc := &Service{}
+	mutationCalled := false
+	svc.API = &fakeAPI{
+		restFunc: func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+			assert.Equal(t, "GET", method)
+			assert.Equal(t, "repos/octo/demo/pulls/comments/11", path)
+			payload := map[string]interface{}{"node_id": "C_node"}
+			return assign(result, payload)
+		},
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case commentThreadQuery:
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"pullRequestReviewThread": map[string]interface{}{"id": "T6"},
+					},
+				}
+				return assign(result, payload)
+			case threadDetailsQuery:
+				payload := struct {
+					Node *threadDetails `json:"node"`
+				}{Node: &threadDetails{ID: "T6", IsResolved: true, ViewerCanResolve: true, ViewerCanUnresolve: true}}
+				return assign(result, payload)
+			case unresolveThreadMutation:
+				mutationCalled = true
+				payload := map[string]interface{}{
+					"unresolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{"id": "T6", "isResolved": false},
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
+	res, err := svc.Unresolve(identity, ActionOptions{CommentID: 11})
+	require.NoError(t, err)
+	assert.True(t, res.Changed)
+	assert.False(t, res.IsResolved)
+	assert.Equal(t, "T6", res.ThreadID)
+	assert.True(t, mutationCalled)
+}
+
 func assign(target interface{}, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

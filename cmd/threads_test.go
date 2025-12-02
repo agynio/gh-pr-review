@@ -151,6 +151,68 @@ func TestThreadsResolveCommandByCommentID(t *testing.T) {
 	assert.Equal(t, true, payload["isResolved"])
 }
 
+func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		switch {
+		case strings.Contains(query, "ThreadDetails"):
+			payload := map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":                 "T_thread",
+					"isResolved":         true,
+					"viewerCanResolve":   true,
+					"viewerCanUnresolve": true,
+				},
+			}
+			return assignJSON(result, payload)
+		case strings.Contains(query, "unresolveReviewThread"):
+			payload := map[string]interface{}{
+				"unresolveReviewThread": map[string]interface{}{
+					"thread": map[string]interface{}{
+						"id":         "T_thread",
+						"isResolved": false,
+					},
+				},
+			}
+			return assignJSON(result, payload)
+		default:
+			return errors.New("unexpected query")
+		}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"threads", "unresolve", "--json", "--thread-id", "T_thread", "octo/demo#9"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "T_thread", payload["threadId"])
+	assert.Equal(t, true, payload["changed"])
+	assert.Equal(t, false, payload["isResolved"])
+}
+
+func TestThreadsUnresolveRequiresIdentifier(t *testing.T) {
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"threads", "unresolve", "--json", "octo/demo#2"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "thread-id or --comment-id")
+}
+
 func TestThreadsResolveRequiresExclusiveSelector(t *testing.T) {
 	root := newRootCommand()
 	root.SetOut(&bytes.Buffer{})
