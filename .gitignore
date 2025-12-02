@@ -1,0 +1,4 @@
+dist/
+bin/
+*.log
+.DS_Store
