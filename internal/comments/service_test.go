@@ -119,6 +119,96 @@ func TestServiceList_LatestReviewNotFound(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestServiceIDs_WithLimitAndPagination(t *testing.T) {
+	api := &fakeAPI{}
+	api.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "repos/octo/demo/pulls/7/reviews/55/comments":
+			require.Equal(t, "50", params["per_page"])
+			require.Equal(t, "2", params["page"])
+			payload := []map[string]interface{}{
+				{
+					"id":                 201,
+					"body":               "hello",
+					"author_association": "MEMBER",
+					"created_at":         "2024-01-01T00:00:00Z",
+					"updated_at":         "2024-01-02T00:00:00Z",
+					"html_url":           "https://example.com",
+					"path":               "file.go",
+					"line":               42,
+					"user": map[string]interface{}{
+						"login": "octocat",
+						"id":    77,
+					},
+				},
+			}
+			return assign(result, payload)
+		default:
+			return errors.New("unexpected path: " + path)
+		}
+	}
+
+	svc := NewService(api)
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	entries, err := svc.IDs(pr, IDsOptions{ReviewID: 55, Limit: 1, PerPage: 50, Page: 2})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	entry := entries[0]
+	assert.Equal(t, int64(201), entry.ID)
+	assert.Equal(t, "hello", entry.Body)
+	require.NotNil(t, entry.User)
+	assert.Equal(t, "octocat", entry.User.Login)
+	assert.Equal(t, int64(77), entry.User.ID)
+	assert.Equal(t, "MEMBER", entry.AuthorAssociation)
+	assert.Equal(t, "2024-01-01T00:00:00Z", entry.CreatedAt)
+	assert.Equal(t, "2024-01-02T00:00:00Z", entry.UpdatedAt)
+	assert.Equal(t, "https://example.com", entry.HTMLURL)
+	assert.Equal(t, "file.go", entry.Path)
+	require.NotNil(t, entry.Line)
+	assert.Equal(t, 42, *entry.Line)
+}
+
+func TestServiceIDs_WithLatestResolution(t *testing.T) {
+	api := &fakeAPI{}
+	api.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "user":
+			return assign(result, map[string]interface{}{"login": "octocat"})
+		case "repos/octo/demo/pulls/7/reviews":
+			payload := []map[string]interface{}{
+				{
+					"id":           88,
+					"state":        "COMMENTED",
+					"submitted_at": "2024-02-01T00:00:00Z",
+					"user":         map[string]interface{}{"login": "octocat"},
+				},
+			}
+			return assign(result, payload)
+		case "repos/octo/demo/pulls/7/reviews/88/comments":
+			require.Equal(t, "100", params["per_page"])
+			return assign(result, []map[string]interface{}{{"id": 301, "body": "note"}})
+		default:
+			return errors.New("unexpected path")
+		}
+	}
+
+	svc := NewService(api)
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	entries, err := svc.IDs(pr, IDsOptions{Latest: true})
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, int64(301), entries[0].ID)
+	assert.Equal(t, "note", entries[0].Body)
+}
+
+func TestServiceIDs_InvalidLimit(t *testing.T) {
+	svc := NewService(&fakeAPI{})
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	_, err := svc.IDs(pr, IDsOptions{ReviewID: 55, Limit: -1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "limit")
+}
+
 func TestServiceReply_AutoSubmitPending(t *testing.T) {
 	api := &fakeAPI{}
 	var submitted []int64

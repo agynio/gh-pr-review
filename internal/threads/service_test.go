@@ -503,6 +503,91 @@ func TestUnresolveViaCommentID(t *testing.T) {
 	assert.True(t, mutationCalled)
 }
 
+func TestFindByThreadID(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				require.Equal(t, "T-thread", variables["id"])
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":         "T-thread",
+						"isResolved": true,
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5, Host: "github.com"}
+	res, err := svc.Find(identity, FindOptions{ThreadID: "T-thread"})
+	require.NoError(t, err)
+	assert.Equal(t, "T-thread", res.ID)
+	assert.True(t, res.IsResolved)
+}
+
+func TestFindByCommentIDFallback(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+			if path == "repos/octo/demo/pulls/comments/900" {
+				return assign(result, map[string]interface{}{"node_id": "C-node"})
+			}
+			return errors.New("unexpected REST path: " + path)
+		}),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case commentThreadQuery:
+				return errors.New("field PullRequestReviewThread does not exist on GHES")
+			case listThreadsQuery:
+				require.Equal(t, "PR_node", variables["id"])
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id":         "T-fallback",
+									"isResolved": false,
+									"isOutdated": false,
+									"path":       "file.go",
+									"comments": map[string]interface{}{
+										"nodes": []map[string]interface{}{
+											{"databaseId": float64(900), "viewerDidAuthor": false, "updatedAt": time.Now()},
+										},
+									},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				}
+				return assign(result, payload)
+			case threadDetailsQuery:
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":         "T-fallback",
+						"isResolved": false,
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5, Host: "github.com"}
+	res, err := svc.Find(identity, FindOptions{CommentID: 900})
+	require.NoError(t, err)
+	assert.Equal(t, "T-fallback", res.ID)
+	assert.False(t, res.IsResolved)
+}
+
 func assign(dst interface{}, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

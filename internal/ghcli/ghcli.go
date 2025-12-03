@@ -91,6 +91,7 @@ func (c *Client) REST(method, path string, params map[string]string, body interf
 		args = append(args, "--hostname", host)
 	}
 
+	args = append(args, "--header", "X-GitHub-Api-Version: 2022-11-28")
 	args = append(args, path, "-X", method)
 
 	for key, value := range params {

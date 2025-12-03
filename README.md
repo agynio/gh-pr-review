@@ -96,6 +96,25 @@ shorthand and do not require a local git checkout. Authentication and host
 resolution defer to the existing `gh` CLI configuration, including `GH_HOST` for
 GitHub Enterprise environments.
 
+### Helper commands for identifiers
+
+Emit minimal JSON for frequently needed identifiers:
+
+```sh
+# Locate the latest submitted review for a reviewer
+gh pr-review review latest-id --per_page 100 --page 1 --reviewer octocat owner/repo#42
+
+# List comment identifiers (with bodies) for a review
+gh pr-review comments ids --review_id 3531807471 --limit 50 owner/repo#42
+
+# Map a comment to its thread (or fetch by thread ID) with minimal schema
+gh pr-review threads find --comment_id 2582545223 owner/repo#42
+```
+
+Outputs are pure JSON with REST/GraphQL field names and include only fields that
+are present from the source APIs (no null placeholders). The `threads find`
+command always emits exactly `{ "id", "isResolved" }`.
+
 ## Development
 
 Run the test suite and linters locally with cgo disabled (matching the release build):

@@ -51,6 +51,18 @@ type ActionResult struct {
 	Changed    bool   `json:"changed"`
 }
 
+// FindOptions configures lookup of a specific review thread.
+type FindOptions struct {
+	ThreadID  string
+	CommentID int64
+}
+
+// FindResult exposes the minimal schema required by callers when locating threads.
+type FindResult struct {
+	ID         string `json:"id"`
+	IsResolved bool   `json:"isResolved"`
+}
+
 type pullContext struct {
 	identity resolver.Identity
 	nodeID   string
@@ -154,6 +166,40 @@ func (s *Service) Resolve(pr resolver.Identity, opts ActionOptions) (ActionResul
 // Unresolve reopens a thread when permitted.
 func (s *Service) Unresolve(pr resolver.Identity, opts ActionOptions) (ActionResult, error) {
 	return s.changeResolution(pr, opts, false)
+}
+
+// Find returns the thread identifier and resolution state derived from either a thread or comment ID.
+func (s *Service) Find(pr resolver.Identity, opts FindOptions) (FindResult, error) {
+	threadID := strings.TrimSpace(opts.ThreadID)
+	hasThread := threadID != ""
+	hasComment := opts.CommentID > 0
+
+	switch {
+	case hasThread && hasComment:
+		return FindResult{}, errors.New("specify either --thread_id or --comment_id, not both")
+	case !hasThread && !hasComment:
+		return FindResult{}, errors.New("must provide --thread_id or --comment_id")
+	}
+
+	ctx, err := s.loadPullContext(pr)
+	if err != nil {
+		return FindResult{}, err
+	}
+
+	if !hasThread {
+		resolvedID, err := s.resolveThreadID(ctx, ActionOptions{CommentID: opts.CommentID})
+		if err != nil {
+			return FindResult{}, err
+		}
+		threadID = resolvedID
+	}
+
+	thread, err := s.fetchThread(ctx.identity.Host, threadID)
+	if err != nil {
+		return FindResult{}, err
+	}
+
+	return FindResult{ID: thread.ID, IsResolved: thread.IsResolved}, nil
 }
 
 type threadsQueryResponse struct {

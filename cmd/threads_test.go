@@ -238,6 +238,55 @@ func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
 	assert.Equal(t, false, payload["isResolved"])
 }
 
+func TestThreadsFindCommandByThreadID(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		if method != "GET" {
+			return errors.New("unexpected method")
+		}
+		switch path {
+		case "repos/octo/demo":
+			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
+		case "repos/octo/demo/pulls/5":
+			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
+		default:
+			return errors.New("unexpected path")
+		}
+	}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		if !strings.Contains(query, "ThreadDetails") {
+			return errors.New("unexpected query")
+		}
+		payload := map[string]interface{}{
+			"node": map[string]interface{}{
+				"id":         "T-find",
+				"isResolved": true,
+			},
+		}
+		return assignJSON(result, payload)
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"threads", "find", "--thread_id", "T-find", "octo/demo#5"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "T-find", payload["id"])
+	assert.Equal(t, true, payload["isResolved"])
+}
+
 func TestThreadsUnresolveRequiresIdentifier(t *testing.T) {
 	root := newRootCommand()
 	root.SetOut(&bytes.Buffer{})

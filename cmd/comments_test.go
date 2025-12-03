@@ -108,6 +108,55 @@ func TestCommentsRequiresSelectorOrPR(t *testing.T) {
 	assert.Contains(t, err.Error(), "must specify a pull request")
 }
 
+func TestCommentsIDsCommand(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "repos/octo/demo/pulls/7/reviews/55/comments":
+			require.Equal(t, "50", params["per_page"])
+			require.Equal(t, "2", params["page"])
+			payload := []map[string]interface{}{
+				{
+					"id":       201,
+					"body":     "hello",
+					"line":     42,
+					"user":     map[string]interface{}{"login": "octocat", "id": 77},
+					"path":     "file.go",
+					"html_url": "https://example.com/comment",
+				},
+			}
+			return assignJSON(result, payload)
+		default:
+			return errors.New("unexpected path")
+		}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"comments", "ids", "--review_id", "55", "--limit", "1", "--per_page", "50", "--page", "2", "octo/demo#7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload []map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	require.Len(t, payload, 1)
+	assert.Equal(t, float64(201), payload[0]["id"])
+	assert.Equal(t, "hello", payload[0]["body"])
+	user, ok := payload[0]["user"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "octocat", user["login"])
+	assert.Equal(t, "file.go", payload[0]["path"])
+}
+
 func assignJSON(result interface{}, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {

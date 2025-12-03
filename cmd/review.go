@@ -44,6 +44,8 @@ func newReviewCommand() *cobra.Command {
 	cmd.Flags().StringVar(&opts.Body, "body", "", "Comment or review body")
 	cmd.Flags().StringVar(&opts.Event, "event", opts.Event, "Review submission event (APPROVE, COMMENT, REQUEST_CHANGES)")
 
+	cmd.AddCommand(newReviewLatestIDCommand())
+
 	return cmd
 }
 
@@ -182,4 +184,62 @@ func normalizeEvent(event string) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid event %q: must be APPROVE, COMMENT, or REQUEST_CHANGES", event)
 	}
+}
+
+func newReviewLatestIDCommand() *cobra.Command {
+	opts := &reviewLatestOptions{}
+
+	cmd := &cobra.Command{
+		Use:   "latest-id [<number> | <url> | <owner>/<repo>#<number>]",
+		Short: "Show the latest submitted review identifier for a reviewer",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				opts.Selector = args[0]
+			}
+			return runReviewLatestID(cmd, opts)
+		},
+	}
+
+	cmd.Flags().StringVarP(&opts.Repo, "repo", "R", "", "Repository in 'owner/repo' format")
+	cmd.Flags().IntVar(&opts.Pull, "pr", 0, "Pull request number")
+	cmd.Flags().StringVar(&opts.Reviewer, "reviewer", "", "Reviewer login (defaults to authenticated user)")
+	cmd.Flags().IntVar(&opts.PerPage, "per_page", 0, "Number of reviews per page (REST)")
+	cmd.Flags().IntVar(&opts.Page, "page", 0, "Page index for the initial REST request")
+
+	return cmd
+}
+
+type reviewLatestOptions struct {
+	Repo     string
+	Pull     int
+	Selector string
+	Reviewer string
+	PerPage  int
+	Page     int
+}
+
+func runReviewLatestID(cmd *cobra.Command, opts *reviewLatestOptions) error {
+	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
+	if err != nil {
+		return err
+	}
+
+	hostEnv := os.Getenv("GH_HOST")
+	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
+	if err != nil {
+		return err
+	}
+
+	service := reviewsvc.NewService(apiClientFactory(identity.Host))
+	summary, err := service.LatestSubmitted(identity, reviewsvc.LatestOptions{
+		Reviewer: opts.Reviewer,
+		PerPage:  opts.PerPage,
+		Page:     opts.Page,
+	})
+	if err != nil {
+		return err
+	}
+
+	return encodeJSON(cmd, summary)
 }
