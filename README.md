@@ -4,6 +4,10 @@
 pull request review workflows. It adds helpers for listing review comments,
 replying to threads, and managing pending reviews without cloning repositories.
 
+- [Commands](#commands)
+- [Agent usage guide](#agent-usage-guide)
+- [Development](#development)
+
 ## Installation
 
 Install or upgrade directly from GitHub:
@@ -113,6 +117,11 @@ gh pr-review threads find --comment_id 2582545223 owner/repo#42
 Outputs are pure JSON with REST/GraphQL field names and include only fields that
 are present from the source APIs (no null placeholders). The `threads find`
 command always emits exactly `{ "id", "isResolved" }`.
+
+## Agent usage guide
+
+See [docs/AGENTS.md](docs/AGENTS.md) for agent-focused workflows, prompts, and
+best practices when invoking `gh pr-review` from automation.
 
 ## Development
 
