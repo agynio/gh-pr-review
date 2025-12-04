@@ -170,11 +170,23 @@ func executeReviewSubmit(cmd *cobra.Command, service *reviewsvc.Service, pr reso
 		Event:    event,
 		Body:     opts.Body,
 	}
-	state, err := service.Submit(pr, input)
+	status, err := service.Submit(pr, input)
 	if err != nil {
 		return err
 	}
-	return encodeJSON(cmd, state)
+	if status.Success {
+		return encodeJSON(cmd, map[string]string{"status": "Review submitted successfully"})
+	}
+	failure := map[string]interface{}{
+		"status": "Review submission failed",
+	}
+	if len(status.Errors) > 0 {
+		failure["errors"] = status.Errors
+	}
+	if err := encodeJSON(cmd, failure); err != nil {
+		return err
+	}
+	return errors.New("review submission failed")
 }
 
 func normalizeSide(side string) (string, error) {

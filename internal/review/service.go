@@ -26,6 +26,12 @@ type ReviewState struct {
 	HTMLURL     *string `json:"html_url,omitempty"`
 }
 
+// SubmitStatus represents the outcome of a review submission mutation.
+type SubmitStatus struct {
+	Success bool
+	Errors  []ghcli.GraphQLErrorEntry
+}
+
 // ReviewThread represents an inline comment thread added to a pending review.
 type ReviewThread struct {
 	ID         string `json:"id"`
@@ -205,7 +211,7 @@ func (s *Service) AddThread(pr resolver.Identity, input ThreadInput) (*ReviewThr
 }
 
 // Submit finalizes a pending review with the given event and optional body.
-func (s *Service) Submit(_ resolver.Identity, input SubmitInput) (*ReviewState, error) {
+func (s *Service) Submit(_ resolver.Identity, input SubmitInput) (*SubmitStatus, error) {
 	reviewID := strings.TrimSpace(input.ReviewID)
 	if reviewID == "" {
 		return nil, errors.New("review id is required")
@@ -227,60 +233,16 @@ func (s *Service) Submit(_ resolver.Identity, input SubmitInput) (*ReviewState, 
 
 	variables := map[string]interface{}{"input": graphqlInput}
 
-	var response struct {
-		Data struct {
-			SubmitPullRequestReview struct {
-				PullRequestReview *struct {
-					ID          string  `json:"id"`
-					State       string  `json:"state"`
-					SubmittedAt *string `json:"submittedAt"`
-					DatabaseID  *int64  `json:"databaseId"`
-					URL         string  `json:"url"`
-				} `json:"pullRequestReview"`
-			} `json:"submitPullRequestReview"`
-		} `json:"data"`
-	}
-
+	var response struct{}
 	if err := s.API.GraphQL(query, variables, &response); err != nil {
+		var gqlErr *ghcli.GraphQLError
+		if errors.As(err, &gqlErr) {
+			return &SubmitStatus{Success: false, Errors: gqlErr.Errors}, nil
+		}
 		return nil, err
 	}
 
-	review := response.Data.SubmitPullRequestReview.PullRequestReview
-	if review == nil {
-		return nil, errors.New("submit review returned no review")
-	}
-
-	id := strings.TrimSpace(review.ID)
-	if id == "" {
-		return nil, errors.New("submit review response missing review id")
-	}
-
-	stateValue := strings.TrimSpace(review.State)
-	if stateValue == "" {
-		return nil, errors.New("submit review response missing state")
-	}
-
-	var submittedAt *string
-	if review.SubmittedAt != nil {
-		trimmed := strings.TrimSpace(*review.SubmittedAt)
-		if trimmed != "" {
-			submittedAt = &trimmed
-		}
-	}
-
-	trimmedURL := strings.TrimSpace(review.URL)
-	var htmlURL *string
-	if trimmedURL != "" {
-		htmlURL = &trimmedURL
-	}
-
-	return &ReviewState{
-		ID:          id,
-		State:       stateValue,
-		SubmittedAt: submittedAt,
-		DatabaseID:  review.DatabaseID,
-		HTMLURL:     htmlURL,
-	}, nil
+	return &SubmitStatus{Success: true}, nil
 }
 
 func (s *Service) currentViewer() (string, error) {

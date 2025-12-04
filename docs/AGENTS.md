@@ -28,6 +28,12 @@ gh pr-review review --submit \
   --body "Looks good" \
   owner/repo#42
 
+# Successful submissions emit:
+# { "status": "Review submitted successfully" }
+#
+# GraphQL errors emit:
+# { "status": "Review submission failed", "errors": [ ... ] }
+
 # Fetch the latest pending review identifier (GraphQL only)
 gh pr-review review pending-id --reviewer octocat owner/repo#42
 ```

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Agyn-sandbox/gh-pr-review/internal/ghcli"
 	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -287,35 +288,71 @@ func TestServiceSubmit(t *testing.T) {
 		require.Equal(t, "PRR_kwM123456", input["pullRequestReviewId"])
 		require.Equal(t, "COMMENT", input["event"])
 		require.Equal(t, "Looks good", input["body"])
-
-		payload := map[string]interface{}{
+		return assign(result, map[string]interface{}{
 			"data": map[string]interface{}{
 				"submitPullRequestReview": map[string]interface{}{
 					"pullRequestReview": map[string]interface{}{
-						"id":          " PRR_kwM123456 ",
-						"state":       " COMMENTED ",
-						"submittedAt": " 2024-05-01T12:00:00Z ",
-						"databaseId":  511,
-						"url":         " https://example.com/review/RV1 ",
+						"id": "PRR_kwM123456",
 					},
 				},
 			},
-		}
-		return assign(result, payload)
+		})
 	}
 
 	svc := NewService(api)
 	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	state, err := svc.Submit(pr, SubmitInput{ReviewID: " PRR_kwM123456 ", Event: "COMMENT", Body: " Looks good "})
+	status, err := svc.Submit(pr, SubmitInput{ReviewID: " PRR_kwM123456 ", Event: "COMMENT", Body: " Looks good "})
 	require.NoError(t, err)
-	assert.Equal(t, "PRR_kwM123456", state.ID)
-	assert.Equal(t, "COMMENTED", state.State)
-	require.NotNil(t, state.SubmittedAt)
-	assert.Equal(t, "2024-05-01T12:00:00Z", *state.SubmittedAt)
-	require.NotNil(t, state.DatabaseID)
-	assert.Equal(t, int64(511), *state.DatabaseID)
-	require.NotNil(t, state.HTMLURL)
-	assert.Equal(t, "https://example.com/review/RV1", *state.HTMLURL)
+	assert.True(t, status.Success)
+	assert.Empty(t, status.Errors)
+}
+
+func TestServiceSubmitHandlesNullReviewData(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return assign(result, map[string]interface{}{
+			"data": map[string]interface{}{
+				"submitPullRequestReview": map[string]interface{}{
+					"pullRequestReview": nil,
+				},
+			},
+		})
+	}
+
+	svc := NewService(api)
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	status, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwM123", Event: "APPROVE"})
+	require.NoError(t, err)
+	assert.True(t, status.Success)
+	assert.Empty(t, status.Errors)
+}
+
+func TestServiceSubmitGraphQLErrors(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return &ghcli.GraphQLError{Errors: []ghcli.GraphQLErrorEntry{{Message: "boom", Path: []interface{}{"mutation", "submit"}}}}
+	}
+
+	svc := NewService(api)
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	status, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwM123", Event: "COMMENT"})
+	require.NoError(t, err)
+	assert.False(t, status.Success)
+	require.Len(t, status.Errors, 1)
+	assert.Equal(t, "boom", status.Errors[0].Message)
+}
+
+func TestServiceSubmitPropagatesAPIErrors(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("network down")
+	}
+
+	svc := NewService(api)
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	_, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwM123", Event: "COMMENT"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "network down")
 }
 
 func TestServiceSubmitErrorOnMissingReviewID(t *testing.T) {
@@ -330,101 +367,6 @@ func TestServiceSubmitErrorOnMissingReviewID(t *testing.T) {
 	_, err := svc.Submit(pr, SubmitInput{ReviewID: " ", Event: "APPROVE"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "review id is required")
-}
-
-func TestServiceSubmitHandlesOptionalFields(t *testing.T) {
-	api := &fakeAPI{}
-	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		payload := map[string]interface{}{
-			"data": map[string]interface{}{
-				"submitPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{
-						"id":          "PRR_kwMoptional",
-						"state":       "APPROVED",
-						"url":         " ",
-						"databaseId":  nil,
-						"submittedAt": nil,
-					},
-				},
-			},
-		}
-		return assign(result, payload)
-	}
-
-	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	state, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwMoptional", Event: "APPROVE"})
-	require.NoError(t, err)
-	require.Nil(t, state.SubmittedAt)
-	require.Nil(t, state.DatabaseID)
-	require.Nil(t, state.HTMLURL)
-	assert.Equal(t, "APPROVED", state.State)
-}
-
-func TestServiceSubmitErrorOnNilReview(t *testing.T) {
-	api := &fakeAPI{}
-	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		payload := map[string]interface{}{
-			"data": map[string]interface{}{
-				"submitPullRequestReview": map[string]interface{}{
-					"pullRequestReview": nil,
-				},
-			},
-		}
-		return assign(result, payload)
-	}
-
-	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	_, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwM123", Event: "COMMENT"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "returned no review")
-}
-
-func TestServiceSubmitErrorOnBlankReviewIDFromGraphQL(t *testing.T) {
-	api := &fakeAPI{}
-	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		payload := map[string]interface{}{
-			"data": map[string]interface{}{
-				"submitPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{
-						"id":    " ",
-						"state": "APPROVED",
-					},
-				},
-			},
-		}
-		return assign(result, payload)
-	}
-
-	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	_, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwM123", Event: "APPROVE"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing review id")
-}
-
-func TestServiceSubmitErrorOnBlankStateFromGraphQL(t *testing.T) {
-	api := &fakeAPI{}
-	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		payload := map[string]interface{}{
-			"data": map[string]interface{}{
-				"submitPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{
-						"id":    "PRR_kwM123",
-						"state": " ",
-					},
-				},
-			},
-		}
-		return assign(result, payload)
-	}
-
-	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	_, err := svc.Submit(pr, SubmitInput{ReviewID: "PRR_kwM123", Event: "APPROVE"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing state")
 }
 
 func assign(result interface{}, payload interface{}) error {

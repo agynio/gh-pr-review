@@ -87,48 +87,38 @@ gh pr-review review pending-id --reviewer octocat owner/repo#42
 }
 ```
 
-## review --submit (REST only)
+## review --submit (GraphQL only)
 
 - **Purpose:** Finalize a pending review as COMMENT, APPROVE, or
   REQUEST_CHANGES.
 - **Inputs:**
-  - `--review-id` **(required):** Numeric REST identifier. GraphQL IDs are
-    rejected.
+  - `--review-id` **(required):** GraphQL review node ID (must start with
+    `PRR_`). Numeric REST identifiers are rejected.
   - `--event` **(required):** One of `COMMENT`, `APPROVE`, `REQUEST_CHANGES`.
-  - `--body`: Optional message. Required by GitHub when using
+  - `--body`: Optional message. GitHub requires a body for
     `REQUEST_CHANGES`.
-- **Backend:** GitHub REST APIs:
-  - `POST /repos/{owner}/{repo}/pulls/{number}/reviews/{id}/events`
-  - `GET /repos/{owner}/{repo}/pulls/{number}/reviews/{id}` (post-submit state)
-- **Output schema:** [`ReviewState`](SCHEMAS.md#reviewstate).
+- **Backend:** GitHub GraphQL `submitPullRequestReview` mutation.
+- **Output schema:** Status payload `{"status": "…"}`. When GraphQL returns
+  errors, the command emits `{ "status": "Review submission failed",
+  "errors": [...] }` and exits non-zero.
 
 ```sh
-# COMMENT
 gh pr-review review --submit \
-  --review-id 3531807471 \
-  --event COMMENT \
-  --body "Looks great" \
-  owner/repo#42
-
-# APPROVE
-gh pr-review review --submit \
-  --review-id 3531807471 \
-  --event APPROVE \
-  owner/repo#42
-
-# REQUEST_CHANGES
-gh pr-review review --submit \
-  --review-id 3531807471 \
+  --review-id PRR_kwDOAAABbcdEFG12 \
   --event REQUEST_CHANGES \
   --body "Please cover edge cases" \
   owner/repo#42
 
 {
-  "id": "PRR_kwDOAAABbcdEFG12",
-  "state": "REQUEST_CHANGES",
-  "submitted_at": "2024-12-19T18:43:22Z",
-  "database_id": 3531807471,
-  "html_url": "https://github.com/owner/repo/pull/42#pullrequestreview-3531807471"
+  "status": "Review submitted successfully"
+}
+
+# GraphQL error example
+{
+  "status": "Review submission failed",
+  "errors": [
+    { "message": "mutation failed", "path": ["mutation", "submitPullRequestReview"] }
+  ]
 }
 ```
 

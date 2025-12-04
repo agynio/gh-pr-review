@@ -154,20 +154,13 @@ func TestReviewSubmitCommand(t *testing.T) {
 		require.Equal(t, "COMMENT", payload["event"])
 		require.Equal(t, "Please update", payload["body"])
 
-		response := obj{
+		return assignJSON(result, obj{
 			"data": obj{
 				"submitPullRequestReview": obj{
-					"pullRequestReview": obj{
-						"id":          " PRR_kwM123 ",
-						"state":       " COMMENTED ",
-						"submittedAt": " 2024-05-01T12:00:00Z ",
-						"databaseId":  511,
-						"url":         " https://example.com/review/RV1 ",
-					},
+					"pullRequestReview": obj{"id": "PRR_kwM123"},
 				},
 			},
-		}
-		return assignJSON(result, response)
+		})
 	}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
@@ -184,11 +177,7 @@ func TestReviewSubmitCommand(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, "PRR_kwM123", payload["id"])
-	assert.Equal(t, "COMMENTED", payload["state"])
-	assert.Equal(t, "2024-05-01T12:00:00Z", payload["submitted_at"])
-	assert.Equal(t, float64(511), payload["database_id"])
-	assert.Equal(t, "https://example.com/review/RV1", payload["html_url"])
+	assert.Equal(t, "Review submitted successfully", payload["status"])
 }
 
 func TestReviewSubmitCommandRequiresGraphQLReviewID(t *testing.T) {
@@ -235,7 +224,7 @@ func TestReviewSubmitCommandRejectsNonPRRPrefix(t *testing.T) {
 	assert.Contains(t, err.Error(), "GraphQL review node id")
 }
 
-func TestReviewSubmitCommandErrorsWhenMutationReturnsNull(t *testing.T) {
+func TestReviewSubmitCommandAllowsNullReview(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
@@ -253,13 +242,46 @@ func TestReviewSubmitCommandErrorsWhenMutationReturnsNull(t *testing.T) {
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
 	root := newRootCommand()
-	root.SetOut(&bytes.Buffer{})
+	stdout := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"review", "--submit", "--review-id", "PRR_kwM123", "--event", "COMMENT", "octo/demo#7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "Review submitted successfully", payload["status"])
+}
+
+func TestReviewSubmitCommandHandlesGraphQLErrors(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return &ghcli.GraphQLError{Errors: []ghcli.GraphQLErrorEntry{{Message: "mutation failed", Path: []interface{}{"mutation", "submitPullRequestReview"}}}}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	root.SetOut(stdout)
 	root.SetErr(&bytes.Buffer{})
 	root.SetArgs([]string{"review", "--submit", "--review-id", "PRR_kwM123", "--event", "COMMENT", "octo/demo#7"})
 
 	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "returned no review")
+	assert.Contains(t, err.Error(), "review submission failed")
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "Review submission failed", payload["status"])
+	errorsField, ok := payload["errors"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, errorsField, 1)
+	first, ok := errorsField[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "mutation failed", first["message"])
 }
 
 func TestReviewLatestIDCommand(t *testing.T) {

@@ -76,8 +76,9 @@ The quickest path from opening a pending review to resolving threads:
    ```
 
 5. **Submit the review (GraphQL).** Reuse the pending review `PRR_…`
-   identifier when finalizing. Each event emits the updated review state, and
-   optional fields are omitted when empty.
+   identifier when finalizing. Successful submissions emit a status-only
+   payload. GraphQL-level errors are returned as structured JSON for
+   troubleshooting.
 
    ```sh
    gh pr-review review --submit \
@@ -87,11 +88,18 @@ The quickest path from opening a pending review to resolving threads:
      owner/repo#42
 
    {
-     "id": "PRR_kwDOAAABbcdEFG12",
-     "state": "REQUEST_CHANGES",
-     "submitted_at": "2024-12-19T18:43:22Z",
-     "database_id": 3531807471,
-     "html_url": "https://github.com/owner/repo/pull/42#pullrequestreview-3531807471"
+     "status": "Review submitted successfully"
+   }
+   ```
+
+   On GraphQL errors, the command exits non-zero after emitting:
+
+   ```json
+   {
+     "status": "Review submission failed",
+     "errors": [
+       { "message": "mutation failed", "path": ["mutation", "submitPullRequestReview"] }
+     ]
    }
    ```
 

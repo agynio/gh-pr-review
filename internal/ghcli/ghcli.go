@@ -22,6 +22,31 @@ type API interface {
 	GraphQL(query string, variables map[string]interface{}, result interface{}) error
 }
 
+// GraphQLErrorEntry captures a single GraphQL error payload.
+type GraphQLErrorEntry struct {
+	Message string        `json:"message"`
+	Path    []interface{} `json:"path,omitempty"`
+}
+
+// GraphQLError represents GraphQL-level errors returned alongside a response.
+type GraphQLError struct {
+	Errors []GraphQLErrorEntry
+}
+
+func (e *GraphQLError) Error() string {
+	if len(e.Errors) == 0 {
+		return "graphql returned errors"
+	}
+	if len(e.Errors) == 1 {
+		return fmt.Sprintf("graphql error: %s", e.Errors[0].Message)
+	}
+	parts := make([]string, 0, len(e.Errors))
+	for _, err := range e.Errors {
+		parts = append(parts, err.Message)
+	}
+	return fmt.Sprintf("graphql errors: %s", strings.Join(parts, "; "))
+}
+
 // APIError wraps errors returned by the `gh api` command, exposing the HTTP status code when detected.
 type APIError struct {
 	StatusCode int
@@ -160,17 +185,28 @@ func (c *Client) GraphQL(query string, variables map[string]interface{}, result 
 	if err := json.Unmarshal(stdout, &envelope); err != nil {
 		return fmt.Errorf("unmarshal graphql response: %w", err)
 	}
-	if len(envelope.Errors) > 0 {
-		return fmt.Errorf("graphql returned errors: %s", strings.TrimSpace(string(stdout)))
+	if len(envelope.Data) > 0 && result != nil {
+		if err := json.Unmarshal(envelope.Data, result); err != nil {
+			return fmt.Errorf("unmarshal graphql data: %w", err)
+		}
 	}
 
-	if len(envelope.Data) == 0 {
+	if len(envelope.Errors) > 0 {
+		errs := make([]GraphQLErrorEntry, 0, len(envelope.Errors))
+		for _, raw := range envelope.Errors {
+			var entry GraphQLErrorEntry
+			if err := json.Unmarshal(raw, &entry); err != nil {
+				entry.Message = strings.TrimSpace(string(raw))
+			}
+			errs = append(errs, entry)
+		}
+		return &GraphQLError{Errors: errs}
+	}
+
+	if len(envelope.Data) == 0 && result != nil {
 		return json.Unmarshal(stdout, result)
 	}
 
-	if err := json.Unmarshal(envelope.Data, result); err != nil {
-		return fmt.Errorf("unmarshal graphql data: %w", err)
-	}
 	return nil
 }
 
