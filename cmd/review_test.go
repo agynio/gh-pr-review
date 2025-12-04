@@ -167,3 +167,53 @@ func TestReviewLatestIDCommand(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "casey", user["login"])
 }
+
+func TestReviewPendingIDCommand(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "user":
+			return assignJSON(result, map[string]interface{}{"login": "casey"})
+		case "repos/octo/demo/pulls/7/reviews":
+			require.Equal(t, "100", params["per_page"])
+			require.Equal(t, "1", params["page"])
+			payload := []map[string]interface{}{
+				{
+					"id":                 15,
+					"state":              "PENDING",
+					"author_association": "MEMBER",
+					"html_url":           "https://example.com/pending",
+					"user":               map[string]interface{}{"login": "casey", "id": 77},
+				},
+			}
+			return assignJSON(result, payload)
+		default:
+			return errors.New("unexpected path: " + path)
+		}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"review", "pending-id", "octo/demo#7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, float64(15), payload["id"])
+	assert.Equal(t, "PENDING", payload["state"])
+	assert.Equal(t, "https://example.com/pending", payload["html_url"])
+
+	user, ok := payload["user"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "casey", user["login"])
+}
