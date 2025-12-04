@@ -15,7 +15,7 @@ gh pr-review review --start owner/repo#42
 
 # Add an inline comment to the pending review
 gh pr-review review --add-comment \
-  --review-id R_kwM123456 \
+  --review-id PRR_kwM123456 \
   --path internal/service.go \
   --line 42 \
   --body "nit: use helper" \
@@ -23,7 +23,7 @@ gh pr-review review --add-comment \
 
 # Submit the review (COMMENT | APPROVE | REQUEST_CHANGES)
 gh pr-review review --submit \
-  --review-id 3531807471 \
+  --review-id PRR_kwM123456 \
   --event APPROVE \
   --body "Looks good" \
   owner/repo#42
@@ -32,11 +32,11 @@ gh pr-review review --submit \
 gh pr-review review pending-id --reviewer octocat owner/repo#42
 ```
 
-> **Note:** `--review-id` expects a REST review database ID when submitting and
-> the GraphQL review node ID when adding inline comments. Pending-review
-> helpers use GitHub's GraphQL API exclusively. They fail fast if the payload is
-> missing required data or the authenticated viewer login cannot be resolved—
-> pass `--reviewer` in that scenario.
+> **Note:** `--review-id` always expects the GraphQL review node ID (prefixed
+> with `PRR_`) when submitting a review or adding inline comments. Pending-
+> review helpers use GitHub's GraphQL API exclusively. They fail fast if the
+> payload is missing required data or the authenticated viewer login cannot be
+> resolved—pass `--reviewer` in that scenario.
 
 ## 2. Read and reply to inline comments
 

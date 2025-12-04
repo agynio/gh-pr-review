@@ -35,7 +35,7 @@ func newReviewCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Submit, "submit", false, "Submit a pending review")
 
 	cmd.Flags().StringVar(&opts.Commit, "commit", "", "Commit SHA for review start (defaults to current head)")
-	cmd.Flags().StringVar(&opts.ReviewID, "review-id", "", "Review identifier (REST review ID for --submit; GraphQL ID for --add-comment)")
+	cmd.Flags().StringVar(&opts.ReviewID, "review-id", "", "Review identifier (GraphQL review node ID)")
 	cmd.Flags().StringVar(&opts.Path, "path", "", "File path for inline comment")
 	cmd.Flags().IntVar(&opts.Line, "line", 0, "Line number for inline comment")
 	cmd.Flags().StringVar(&opts.Side, "side", opts.Side, "Diff side for inline comment (LEFT or RIGHT)")
@@ -161,8 +161,12 @@ func executeReviewSubmit(cmd *cobra.Command, service *reviewsvc.Service, pr reso
 	if err != nil {
 		return err
 	}
+	reviewID, err := ensureGraphQLReviewID(opts.ReviewID)
+	if err != nil {
+		return err
+	}
 	input := reviewsvc.SubmitInput{
-		ReviewID: strings.TrimSpace(opts.ReviewID),
+		ReviewID: reviewID,
 		Event:    event,
 		Body:     opts.Body,
 	}
@@ -193,6 +197,27 @@ func normalizeEvent(event string) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid event %q: must be APPROVE, COMMENT, or REQUEST_CHANGES", event)
 	}
+}
+
+func ensureGraphQLReviewID(value string) (string, error) {
+	id := strings.TrimSpace(value)
+	if id == "" {
+		return "", errors.New("review id is required")
+	}
+	if strings.HasPrefix(id, "PRR_") {
+		return id, nil
+	}
+	isNumeric := true
+	for _, r := range id {
+		if r < '0' || r > '9' {
+			isNumeric = false
+			break
+		}
+	}
+	if isNumeric {
+		return "", fmt.Errorf("--review-id %q is a REST review id; provide the GraphQL review node id (PRR_...)", id)
+	}
+	return "", fmt.Errorf("--review-id %q is not a GraphQL review node id (expected prefix PRR_)", id)
 }
 
 func newReviewPendingIDCommand() *cobra.Command {

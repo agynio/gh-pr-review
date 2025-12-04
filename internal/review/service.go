@@ -3,7 +3,6 @@ package review
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/Agyn-sandbox/gh-pr-review/internal/ghcli"
@@ -102,10 +101,18 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 	prr := resp.AddPullRequestReview.PullRequestReview
 	trimmedID := strings.TrimSpace(prr.ID)
 	if trimmedID == "" {
-		return nil, fmt.Errorf("addPullRequestReview returned no review data")
+		return nil, errors.New("addPullRequestReview returned empty id")
+	}
+	trimmedState := strings.TrimSpace(prr.State)
+	if trimmedState == "" {
+		return nil, errors.New("addPullRequestReview returned empty state")
+	}
+	trimmedURL := strings.TrimSpace(prr.URL)
+	if trimmedURL == "" {
+		return nil, errors.New("addPullRequestReview returned empty url")
 	}
 
-	state := ReviewState{ID: trimmedID, State: strings.TrimSpace(prr.State)}
+	state := ReviewState{ID: trimmedID, State: trimmedState}
 
 	if prr.SubmittedAt != nil {
 		trimmed := strings.TrimSpace(*prr.SubmittedAt)
@@ -116,9 +123,7 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 	if prr.DatabaseID != nil {
 		state.DatabaseID = prr.DatabaseID
 	}
-	if trimmedURL := strings.TrimSpace(prr.URL); trimmedURL != "" {
-		state.HTMLURL = &trimmedURL
-	}
+	state.HTMLURL = &trimmedURL
 
 	return &state, nil
 }
@@ -200,42 +205,59 @@ func (s *Service) AddThread(pr resolver.Identity, input ThreadInput) (*ReviewThr
 }
 
 // Submit finalizes a pending review with the given event and optional body.
-func (s *Service) Submit(pr resolver.Identity, input SubmitInput) (*ReviewState, error) {
-	trimmedID := strings.TrimSpace(input.ReviewID)
-	if trimmedID == "" {
+func (s *Service) Submit(_ resolver.Identity, input SubmitInput) (*ReviewState, error) {
+	reviewID := strings.TrimSpace(input.ReviewID)
+	if reviewID == "" {
 		return nil, errors.New("review id is required")
 	}
 
-	if _, err := strconv.ParseInt(trimmedID, 10, 64); err != nil {
-		return nil, fmt.Errorf("invalid review id %q: must be numeric", trimmedID)
+	const query = `mutation SubmitPullRequestReview($input: SubmitPullRequestReviewInput!) {
+  submitPullRequestReview(input: $input) {
+    pullRequestReview { id state submittedAt databaseId url }
+  }
+}`
+
+	graphqlInput := map[string]interface{}{
+		"pullRequestReviewId": reviewID,
+		"event":               input.Event,
+	}
+	if trimmed := strings.TrimSpace(input.Body); trimmed != "" {
+		graphqlInput["body"] = trimmed
 	}
 
-	eventsPath := fmt.Sprintf("repos/%s/%s/pulls/%d/reviews/%s/events", pr.Owner, pr.Repo, pr.Number, trimmedID)
-	body := map[string]string{"event": input.Event}
-	if trimmedBody := strings.TrimSpace(input.Body); trimmedBody != "" {
-		body["body"] = trimmedBody
+	variables := map[string]interface{}{"input": graphqlInput}
+
+	var response struct {
+		Data struct {
+			SubmitPullRequestReview struct {
+				PullRequestReview *struct {
+					ID          string  `json:"id"`
+					State       string  `json:"state"`
+					SubmittedAt *string `json:"submittedAt"`
+					DatabaseID  *int64  `json:"databaseId"`
+					URL         string  `json:"url"`
+				} `json:"pullRequestReview"`
+			} `json:"submitPullRequestReview"`
+		} `json:"data"`
 	}
 
-	if err := s.API.REST("POST", eventsPath, nil, body, nil); err != nil {
+	if err := s.API.GraphQL(query, variables, &response); err != nil {
 		return nil, err
 	}
 
-	detailsPath := fmt.Sprintf("repos/%s/%s/pulls/%d/reviews/%s", pr.Owner, pr.Repo, pr.Number, trimmedID)
-	var review struct {
-		ID          int64   `json:"id"`
-		NodeID      string  `json:"node_id"`
-		State       string  `json:"state"`
-		SubmittedAt *string `json:"submitted_at"`
-		HTMLURL     string  `json:"html_url"`
+	review := response.Data.SubmitPullRequestReview.PullRequestReview
+	if review == nil {
+		return nil, errors.New("submit review returned no review")
 	}
 
-	if err := s.API.REST("GET", detailsPath, nil, nil, &review); err != nil {
-		return nil, err
+	id := strings.TrimSpace(review.ID)
+	if id == "" {
+		return nil, errors.New("submit review response missing review id")
 	}
 
-	nodeID := strings.TrimSpace(review.NodeID)
-	if nodeID == "" {
-		return nil, errors.New("review response missing node identifier")
+	stateValue := strings.TrimSpace(review.State)
+	if stateValue == "" {
+		return nil, errors.New("submit review response missing state")
 	}
 
 	var submittedAt *string
@@ -246,16 +268,19 @@ func (s *Service) Submit(pr resolver.Identity, input SubmitInput) (*ReviewState,
 		}
 	}
 
-	state := ReviewState{
-		ID:          nodeID,
-		State:       strings.TrimSpace(review.State),
+	trimmedURL := strings.TrimSpace(review.URL)
+	var htmlURL *string
+	if trimmedURL != "" {
+		htmlURL = &trimmedURL
+	}
+
+	return &ReviewState{
+		ID:          id,
+		State:       stateValue,
 		SubmittedAt: submittedAt,
-		DatabaseID:  &review.ID,
-	}
-	if trimmed := strings.TrimSpace(review.HTMLURL); trimmed != "" {
-		state.HTMLURL = &trimmed
-	}
-	return &state, nil
+		DatabaseID:  review.DatabaseID,
+		HTMLURL:     htmlURL,
+	}, nil
 }
 
 func (s *Service) currentViewer() (string, error) {

@@ -58,9 +58,10 @@ The quickest path from opening a pending review to resolving threads:
    }
    ```
 
-4. **Locate the numeric review identifier (GraphQL).** `review pending-id`
-   reads GraphQL only; when the authenticated viewer login cannot be resolved,
-   the command errors with guidance to pass `--reviewer`.
+4. **Locate the review identifier (GraphQL).** `review pending-id` reads
+   GraphQL only; when the authenticated viewer login cannot be resolved, the
+   command errors with guidance to pass `--reviewer`. The response includes the
+   GraphQL review node ID and matching numeric database ID.
 
    ```sh
    gh pr-review review pending-id --reviewer octocat owner/repo#42
@@ -74,13 +75,13 @@ The quickest path from opening a pending review to resolving threads:
    }
    ```
 
-5. **Submit the review (REST).** Use the numeric `review-id` returned above.
-   Each event emits the updated review state and timestamps with optional
-   fields omitted when empty.
+5. **Submit the review (GraphQL).** Reuse the pending review `PRR_…`
+   identifier when finalizing. Each event emits the updated review state, and
+   optional fields are omitted when empty.
 
    ```sh
    gh pr-review review --submit \
-     --review-id 3531807471 \
+     --review-id PRR_kwDOAAABbcdEFG12 \
      --event REQUEST_CHANGES \
      --body "Please add tests" \
      owner/repo#42
@@ -191,6 +192,7 @@ gh pr-review review --add-comment \
   --body "nit: prefer helper" \
   owner/repo#42
 
+<<<<<<< HEAD
 # Locate the latest pending review for a specific reviewer
 gh pr-review review pending-id --reviewer octocat owner/repo#42
 ```
@@ -216,8 +218,11 @@ gh pr-review review --submit \
   owner/repo#42
 
 # Request changes with guidance
+=======
+# Submit the review with a specific event (GraphQL review ID required)
+>>>>>>> 7b50bf4 (feat(review): require graphql submit)
 gh pr-review review --submit \
-  --review-id 3531807471 \
+  --review-id PRR_kwM123456 \
   --event REQUEST_CHANGES \
   --body "Missing negative tests" \
   owner/repo#42
@@ -240,12 +245,19 @@ gh pr-review comments reply \
   --body "Thanks for catching this" \
   owner/repo#42
 
+<<<<<<< HEAD
 # Emit only the reply id when you do not need the full payload
 gh pr-review comments reply \
   --comment-id 987654321 \
   --body "Ack" \
   --concise \
   owner/repo#42
+=======
+The `--review-id` flag always expects the GraphQL review node ID (prefixed with
+`PRR_`), including when submitting a review or adding inline comments. Use
+`gh pr-review review pending-id` or `gh pr-review review latest-id` to locate
+the desired identifier.
+>>>>>>> 7b50bf4 (feat(review): require graphql submit)
 ```
 
 When GitHub blocks a reply because you have an outstanding pending review, the

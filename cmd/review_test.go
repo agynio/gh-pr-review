@@ -146,32 +146,28 @@ func TestReviewSubmitCommand(t *testing.T) {
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
-	call := 0
-	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		call++
-		switch call {
-		case 1:
-			require.Equal(t, "POST", method)
-			require.Equal(t, "repos/octo/demo/pulls/7/reviews/511/events", path)
-			payload, ok := body.(map[string]string)
-			require.True(t, ok)
-			require.Equal(t, "COMMENT", payload["event"])
-			require.Equal(t, "Please update", payload["body"])
-			return nil
-		case 2:
-			require.Equal(t, "GET", method)
-			require.Equal(t, "repos/octo/demo/pulls/7/reviews/511", path)
-			response := map[string]interface{}{
-				"id":           511,
-				"node_id":      "RV1",
-				"state":        "COMMENTED",
-				"submitted_at": "2024-05-01T12:00:00Z",
-				"html_url":     "https://example.com/review/RV1",
-			}
-			return assignJSON(result, response)
-		default:
-			return errors.New("unexpected REST call")
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		require.Contains(t, query, "submitPullRequestReview")
+		payload, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "PRR_kwM123", payload["pullRequestReviewId"])
+		require.Equal(t, "COMMENT", payload["event"])
+		require.Equal(t, "Please update", payload["body"])
+
+		response := obj{
+			"data": obj{
+				"submitPullRequestReview": obj{
+					"pullRequestReview": obj{
+						"id":          " PRR_kwM123 ",
+						"state":       " COMMENTED ",
+						"submittedAt": " 2024-05-01T12:00:00Z ",
+						"databaseId":  511,
+						"url":         " https://example.com/review/RV1 ",
+					},
+				},
+			},
 		}
+		return assignJSON(result, response)
 	}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
@@ -180,7 +176,7 @@ func TestReviewSubmitCommand(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"review", "--submit", "--review-id", "511", "--event", "COMMENT", "--body", "Please update", "octo/demo#7"})
+	root.SetArgs([]string{"review", "--submit", "--review-id", "PRR_kwM123", "--event", "COMMENT", "--body", "Please update", "octo/demo#7"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -188,21 +184,20 @@ func TestReviewSubmitCommand(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, "RV1", payload["id"])
+	assert.Equal(t, "PRR_kwM123", payload["id"])
 	assert.Equal(t, "COMMENTED", payload["state"])
 	assert.Equal(t, "2024-05-01T12:00:00Z", payload["submitted_at"])
 	assert.Equal(t, float64(511), payload["database_id"])
 	assert.Equal(t, "https://example.com/review/RV1", payload["html_url"])
-	assert.Equal(t, 2, call)
 }
 
-func TestReviewSubmitCommandRequiresNumericReviewID(t *testing.T) {
+func TestReviewSubmitCommandRequiresGraphQLReviewID(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
-	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		return errors.New("unexpected REST call")
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("unexpected GraphQL call")
 	}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
@@ -211,49 +206,60 @@ func TestReviewSubmitCommandRequiresNumericReviewID(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"review", "--submit", "--review-id", "RV1", "--event", "APPROVE", "octo/demo#7"})
+	root.SetArgs([]string{"review", "--submit", "--review-id", "511", "--event", "APPROVE", "octo/demo#7"})
 
 	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must be numeric")
+	assert.Contains(t, err.Error(), "REST review id")
 }
 
-func TestReviewSubmitCommandErrorsOnMissingNodeID(t *testing.T) {
+func TestReviewSubmitCommandRejectsNonPRRPrefix(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
-	call := 0
-	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		call++
-		switch call {
-		case 1:
-			return nil
-		case 2:
-			payload := map[string]interface{}{
-				"id":           511,
-				"node_id":      " ",
-				"state":        "COMMENTED",
-				"submitted_at": "2024-05-01T12:00:00Z",
-				"html_url":     "https://example.com/review/RV1",
-			}
-			return assignJSON(result, payload)
-		default:
-			return errors.New("unexpected REST call")
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("unexpected GraphQL call")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"review", "--submit", "--review-id", "RANDOM_ID", "--event", "COMMENT", "octo/demo#7"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GraphQL review node id")
+}
+
+func TestReviewSubmitCommandErrorsWhenMutationReturnsNull(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		response := obj{
+			"data": obj{
+				"submitPullRequestReview": obj{
+					"pullRequestReview": nil,
+				},
+			},
 		}
+		return assignJSON(result, response)
 	}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
 	root := newRootCommand()
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	root.SetOut(stdout)
-	root.SetErr(stderr)
-	root.SetArgs([]string{"review", "--submit", "--review-id", "511", "--event", "COMMENT", "octo/demo#7"})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"review", "--submit", "--review-id", "PRR_kwM123", "--event", "COMMENT", "octo/demo#7"})
 
 	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing node identifier")
+	assert.Contains(t, err.Error(), "returned no review")
 }
 
 func TestReviewLatestIDCommand(t *testing.T) {
