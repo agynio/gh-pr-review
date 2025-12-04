@@ -80,7 +80,7 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error)
 		return nil, err
 	}
 
-	var allThreads []Thread
+	allThreads := make([]Thread, 0)
 
 	for _, node := range nodes {
 		if opts.OnlyUnresolved && node.IsResolved {
@@ -250,10 +250,8 @@ func (s *Service) fetchThreads(nodeID string, after *string) (*threadsQueryRespo
 }
 
 func (s *Service) collectThreads(ctx pullContext) ([]threadNode, error) {
-	var (
-		allThreads []threadNode
-		after      *string
-	)
+	allThreads := make([]threadNode, 0)
+	var after *string
 
 	for {
 		resp, err := s.fetchThreads(ctx.nodeID, after)
