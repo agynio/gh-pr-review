@@ -119,6 +119,29 @@ func TestServiceList_LatestReviewNotFound(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestServiceList_ReturnsEmptySlice(t *testing.T) {
+	api := &fakeAPI{}
+	api.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "repos/octo/demo/pulls/7/reviews/55/comments":
+			return assign(result, []map[string]interface{}{})
+		case "repos/octo/demo/pulls/7/reviews":
+			return assign(result, []map[string]interface{}{})
+		case "user":
+			return assign(result, map[string]interface{}{"login": "octocat"})
+		default:
+			return errors.New("unexpected path")
+		}
+	}
+
+	svc := NewService(api)
+	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
+	comments, err := svc.List(pr, ListOptions{ReviewID: 55})
+	require.NoError(t, err)
+	require.NotNil(t, comments)
+	assert.Empty(t, comments)
+}
+
 func TestServiceIDs_WithLimitAndPagination(t *testing.T) {
 	api := &fakeAPI{}
 	api.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {

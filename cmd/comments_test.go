@@ -62,6 +62,36 @@ func TestCommentsListCommandJSON(t *testing.T) {
 	assert.Equal(t, float64(1), payload[0]["id"])
 }
 
+func TestCommentsListCommandEmpty(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		if path == "repos/octo/demo/pulls/7/reviews/55/comments" {
+			return assignJSON(result, []map[string]interface{}{})
+		}
+		return errors.New("unexpected path")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"comments", "--list", "--review-id", "55", "octo/demo#7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload []map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	require.NotNil(t, payload)
+	assert.Len(t, payload, 0)
+}
+
 func TestCommentsReplyCommand(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()

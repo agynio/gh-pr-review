@@ -3,6 +3,9 @@
 This guide provides ready-to-run prompts for scripted or agent-driven use of
 `gh pr-review`. All commands emit JSON with REST/GraphQL-aligned field names and
 include only values present in upstream responses (no null placeholders).
+Empty collections are emitted as `[]` instead of `null`, and the
+`comments reply --concise` mode returns `{ "id" }` when you only need the
+database identifier.
 
 ## 1. Review a pull request end-to-end
 

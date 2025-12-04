@@ -118,6 +118,15 @@ Outputs are pure JSON with REST/GraphQL field names and include only fields that
 are present from the source APIs (no null placeholders). The `threads find`
 command always emits exactly `{ "id", "isResolved" }`.
 
+## Output conventions
+
+All commands emit JSON aligned with GitHub REST/GraphQL schemas.
+
+- Arrays are serialized as `[]` when no results are available.
+- No plaintext is printed; even errors bubble up through the CLI.
+- `gh pr-review comments reply --concise` trims the payload to `{ "id" }` while
+  the default mode returns the full REST response.
+
 ## Agent usage guide
 
 See [docs/AGENTS.md](docs/AGENTS.md) for agent-focused workflows, prompts, and

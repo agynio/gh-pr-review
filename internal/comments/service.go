@@ -44,7 +44,7 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]json.RawMessag
 		return nil, err
 	}
 
-	var all []json.RawMessage
+	all := make([]json.RawMessage, 0)
 	page := 1
 	for {
 		var chunk []json.RawMessage
