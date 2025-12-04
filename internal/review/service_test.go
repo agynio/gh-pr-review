@@ -42,7 +42,13 @@ func TestServiceStart(t *testing.T) {
 		payload := map[string]interface{}{
 			"data": map[string]interface{}{
 				"addPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{"id": "RV1", "state": "PENDING", "submittedAt": nil},
+					"pullRequestReview": map[string]interface{}{
+						"id":          "RV1",
+						"state":       "PENDING",
+						"submittedAt": nil,
+						"databaseId":  321,
+						"url":         "https://example.com/review/RV1",
+					},
 				},
 			},
 		}
@@ -55,6 +61,9 @@ func TestServiceStart(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "RV1", state.ID)
 	assert.Equal(t, "PENDING", state.State)
+	require.NotNil(t, state.DatabaseID)
+	assert.Equal(t, int64(321), *state.DatabaseID)
+	assert.Equal(t, "https://example.com/review/RV1", state.HTMLURL)
 }
 
 func TestServiceAddThread(t *testing.T) {
@@ -83,7 +92,13 @@ func TestServiceSubmit(t *testing.T) {
 		payload := map[string]interface{}{
 			"data": map[string]interface{}{
 				"submitPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{"id": "RV1", "state": "COMMENTED", "submittedAt": "2024-05-01T12:00:00Z"},
+					"pullRequestReview": map[string]interface{}{
+						"id":          "RV1",
+						"state":       "COMMENTED",
+						"submittedAt": "2024-05-01T12:00:00Z",
+						"databaseId":  654,
+						"url":         "https://example.com/review/RV1",
+					},
 				},
 			},
 		}
@@ -96,6 +111,9 @@ func TestServiceSubmit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "RV1", state.ID)
 	assert.Equal(t, "COMMENTED", state.State)
+	require.NotNil(t, state.DatabaseID)
+	assert.Equal(t, int64(654), *state.DatabaseID)
+	assert.Equal(t, "https://example.com/review/RV1", state.HTMLURL)
 }
 
 func assign(result interface{}, payload interface{}) error {

@@ -19,6 +19,8 @@ type ReviewState struct {
 	ID          string  `json:"id"`
 	State       string  `json:"state"`
 	SubmittedAt *string `json:"submitted_at"`
+	DatabaseID  *int64  `json:"database_id,omitempty"`
+	HTMLURL     string  `json:"html_url,omitempty"`
 }
 
 // ReviewThread represents an inline comment thread added to a pending review.
@@ -63,7 +65,7 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 
 	query := `mutation AddPullRequestReview($input: AddPullRequestReviewInput!) {
   addPullRequestReview(input: $input) {
-    pullRequestReview { id state submittedAt }
+    pullRequestReview { id state submittedAt databaseId url }
   }
 }`
 
@@ -81,6 +83,8 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 					ID          string  `json:"id"`
 					State       string  `json:"state"`
 					SubmittedAt *string `json:"submittedAt"`
+					DatabaseID  *int64  `json:"databaseId"`
+					URL         string  `json:"url"`
 				} `json:"pullRequestReview"`
 			} `json:"addPullRequestReview"`
 		} `json:"data"`
@@ -91,7 +95,14 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 	}
 
 	review := response.Data.AddPullRequestReview.PullRequestReview
-	return &ReviewState{ID: review.ID, State: review.State, SubmittedAt: review.SubmittedAt}, nil
+	state := ReviewState{
+		ID:          review.ID,
+		State:       review.State,
+		SubmittedAt: review.SubmittedAt,
+		DatabaseID:  review.DatabaseID,
+		HTMLURL:     strings.TrimSpace(review.URL),
+	}
+	return &state, nil
 }
 
 // AddThread adds an inline review comment thread to an existing pending review.
@@ -161,7 +172,7 @@ func (s *Service) Submit(pr resolver.Identity, input SubmitInput) (*ReviewState,
 
 	query := `mutation SubmitPullRequestReview($input: SubmitPullRequestReviewInput!) {
   submitPullRequestReview(input: $input) {
-    pullRequestReview { id state submittedAt }
+    pullRequestReview { id state submittedAt databaseId url }
   }
 }`
 
@@ -184,6 +195,8 @@ func (s *Service) Submit(pr resolver.Identity, input SubmitInput) (*ReviewState,
 					ID          string  `json:"id"`
 					State       string  `json:"state"`
 					SubmittedAt *string `json:"submittedAt"`
+					DatabaseID  *int64  `json:"databaseId"`
+					URL         string  `json:"url"`
 				} `json:"pullRequestReview"`
 			} `json:"submitPullRequestReview"`
 		} `json:"data"`
@@ -194,7 +207,14 @@ func (s *Service) Submit(pr resolver.Identity, input SubmitInput) (*ReviewState,
 	}
 
 	review := response.Data.SubmitPullRequestReview.PullRequestReview
-	return &ReviewState{ID: review.ID, State: review.State, SubmittedAt: review.SubmittedAt}, nil
+	state := ReviewState{
+		ID:          review.ID,
+		State:       review.State,
+		SubmittedAt: review.SubmittedAt,
+		DatabaseID:  review.DatabaseID,
+		HTMLURL:     strings.TrimSpace(review.URL),
+	}
+	return &state, nil
 }
 
 func (s *Service) pullRequestIdentifiers(pr resolver.Identity) (string, string, error) {

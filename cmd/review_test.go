@@ -27,7 +27,12 @@ func TestReviewStartCommand(t *testing.T) {
 		payload := map[string]interface{}{
 			"data": map[string]interface{}{
 				"addPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{"id": "RV1", "state": "PENDING"},
+					"pullRequestReview": map[string]interface{}{
+						"id":         "RV1",
+						"state":      "PENDING",
+						"databaseId": 88,
+						"url":        "https://example.com/review/RV1",
+					},
 				},
 			},
 		}
@@ -49,6 +54,8 @@ func TestReviewStartCommand(t *testing.T) {
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	assert.Equal(t, "RV1", payload["id"])
+	assert.Equal(t, float64(88), payload["database_id"])
+	assert.Equal(t, "https://example.com/review/RV1", payload["html_url"])
 }
 
 func TestReviewAddCommentCommand(t *testing.T) {
@@ -93,7 +100,12 @@ func TestReviewSubmitCommand(t *testing.T) {
 		payload := map[string]interface{}{
 			"data": map[string]interface{}{
 				"submitPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{"id": "RV1", "state": "COMMENTED"},
+					"pullRequestReview": map[string]interface{}{
+						"id":         "RV1",
+						"state":      "COMMENTED",
+						"databaseId": 99,
+						"url":        "https://example.com/review/RV1",
+					},
 				},
 			},
 		}
@@ -115,6 +127,8 @@ func TestReviewSubmitCommand(t *testing.T) {
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	assert.Equal(t, "RV1", payload["id"])
+	assert.Equal(t, float64(99), payload["database_id"])
+	assert.Equal(t, "https://example.com/review/RV1", payload["html_url"])
 }
 
 func TestReviewLatestIDCommand(t *testing.T) {
