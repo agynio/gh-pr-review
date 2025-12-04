@@ -1,4 +1,5 @@
 # gh-pr-review
+[![Agyn badge](https://agyn.io/badges/badge_dark.svg)](http://agyn.io)
 
 `gh-pr-review` is a precompiled GitHub CLI extension that streamlines
 pull request review workflows. It adds helpers for listing review comments,
