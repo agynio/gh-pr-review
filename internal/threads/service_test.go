@@ -182,6 +182,37 @@ func TestServiceListMineIncludesUnresolvePermission(t *testing.T) {
 	assert.Equal(t, "T-resolved", threads[0].ThreadID)
 }
 
+func TestServiceListUnresolvedEmptyReturnsSlice(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			require.Equal(t, listThreadsQuery, query)
+			require.Equal(t, "PR_node", variables["id"])
+
+			payload := map[string]interface{}{
+				"node": map[string]interface{}{
+					"reviewThreads": map[string]interface{}{
+						"nodes": []map[string]interface{}{},
+						"pageInfo": map[string]interface{}{
+							"hasNextPage": false,
+							"endCursor":   "",
+						},
+					},
+				},
+			}
+
+			return assign(result, payload)
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
+	threads, err := svc.List(identity, ListOptions{OnlyUnresolved: true})
+	require.NoError(t, err)
+	require.NotNil(t, threads)
+	assert.Empty(t, threads)
+}
+
 func TestResolveRequiresPermission(t *testing.T) {
 	svc := &Service{}
 	svc.API = &fakeAPI{
