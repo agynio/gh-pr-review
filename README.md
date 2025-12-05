@@ -258,11 +258,13 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 | `review --start` | GraphQL | Opens a pending review via `addPullRequestReview`. |
 | `review --add-comment` | GraphQL | Requires a `PRR_…` review node ID. |
 | `review report` | GraphQL | Aggregates reviews, inline comments, and replies (used for comment IDs). |
-| `review --submit` | REST | Accepts only numeric review IDs and posts `/reviews/{id}/events`. |
+| `review --submit` | GraphQL | Finalizes a pending review via `submitPullRequestReview` using the `PRR_…` review node ID (executed through the internal `gh api graphql` wrapper). |
 | `comments reply` | REST (GraphQL only locates pending reviews before REST auto-submission) | Replies via REST; when GitHub blocks the reply due to a pending review, the extension discovers pending review IDs via GraphQL and submits them with REST before retrying. |
 | `threads list` | GraphQL | Enumerates review threads for the pull request. |
 | `threads resolve` / `unresolve` | GraphQL (+ REST when mapping `--comment-id`) | Mutates thread resolution with GraphQL; a REST lookup translates numeric comment IDs to node IDs. |
 | `threads find` | GraphQL (+ REST when mapping `--comment_id`) | Returns `{ "id", "isResolved" }`. |
+
+> Note: Some flows, such as auto-submitting pending reviews during `comments reply` when GitHub blocks replies, use REST (POST `/repos/{owner}/{repo}/pulls/{number}/reviews/{id}/events`). The `review --submit` operation itself is GraphQL-based.
 
 
 ## Additional docs
