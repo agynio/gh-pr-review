@@ -46,6 +46,7 @@ func newReviewCommand() *cobra.Command {
 
 	cmd.AddCommand(newReviewLatestIDCommand())
 	cmd.AddCommand(newReviewPendingIDCommand())
+	cmd.AddCommand(newReviewReportCommand())
 
 	return cmd
 }

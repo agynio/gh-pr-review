@@ -1,0 +1,112 @@
+{
+  "repository": {
+    "pullRequest": {
+      "reviews": {
+        "nodes": [
+          {
+            "id": "R1",
+            "state": "APPROVED",
+            "body": "Looks good overall",
+            "submittedAt": "2025-12-03T10:00:00Z",
+            "databaseId": 101,
+            "author": { "login": "alice" }
+          },
+          {
+            "id": "R2",
+            "state": "COMMENTED",
+            "body": "",
+            "submittedAt": null,
+            "databaseId": 202,
+            "author": { "login": "bob" }
+          }
+        ]
+      },
+      "reviewThreads": {
+        "nodes": [
+          {
+            "id": "T1",
+            "path": "main.go",
+            "line": 42,
+            "isResolved": false,
+            "isOutdated": false,
+            "comments": {
+              "nodes": [
+                {
+                  "databaseId": 301,
+                  "body": "Parent comment 1",
+                  "createdAt": "2025-12-03T10:01:00Z",
+                  "author": { "login": "alice" },
+                  "pullRequestReview": {
+                    "id": "R1",
+                    "state": "APPROVED",
+                    "databaseId": 101
+                  },
+                  "replyTo": null
+                },
+                {
+                  "databaseId": 302,
+                  "body": "Reply alpha",
+                  "createdAt": "2025-12-03T10:02:00Z",
+                  "author": { "login": "bob" },
+                  "pullRequestReview": {
+                    "id": "R1",
+                    "state": "APPROVED",
+                    "databaseId": 101
+                  },
+                  "replyTo": { "databaseId": 301 }
+                },
+                {
+                  "databaseId": 303,
+                  "body": "Reply beta",
+                  "createdAt": "2025-12-03T10:03:00Z",
+                  "author": { "login": "alice" },
+                  "pullRequestReview": {
+                    "id": "R1",
+                    "state": "APPROVED",
+                    "databaseId": 101
+                  },
+                  "replyTo": { "databaseId": 302 }
+                }
+              ]
+            }
+          },
+          {
+            "id": "T2",
+            "path": "main.go",
+            "line": null,
+            "isResolved": true,
+            "isOutdated": true,
+            "comments": {
+              "nodes": [
+                {
+                  "databaseId": 401,
+                  "body": "Parent comment 2",
+                  "createdAt": "2025-12-03T10:04:00Z",
+                  "author": { "login": "bob" },
+                  "pullRequestReview": {
+                    "id": "R2",
+                    "state": "COMMENTED",
+                    "databaseId": 202
+                  },
+                  "replyTo": null
+                },
+                {
+                  "databaseId": 402,
+                  "body": "Reply gamma",
+                  "createdAt": "2025-12-03T10:05:00Z",
+                  "author": { "login": "alice" },
+                  "pullRequestReview": {
+                    "id": "R2",
+                    "state": "COMMENTED",
+                    "databaseId": 202
+                  },
+                  "replyTo": { "databaseId": 401 }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
