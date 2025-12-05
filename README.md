@@ -9,7 +9,7 @@ and resolves discussions without cloning repositories.
 - [Review report](#review-report)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
-- [Release 1.4.0](#release-140)
+- [Release 1.5.0](#release-150)
 
 ## Quickstart
 
@@ -141,13 +141,12 @@ The quickest path from opening a pending review to resolving threads:
      }
    ]
 
-   gh pr-review threads resolve --thread-id R_ywDoABC123 owner/repo#42
+gh pr-review threads resolve --thread-id R_ywDoABC123 owner/repo#42
 
-   {
-     "threadId": "R_ywDoABC123",
-     "isResolved": true,
-     "changed": true
-   }
+{
+  "thread_node_id": "R_ywDoABC123",
+  "is_resolved": true
+}
    ```
 
 ## Review report
@@ -162,8 +161,7 @@ Run it with either a combined selector or explicit flags:
 gh pr-review review report -R owner/repo --pr 3
 ```
 
-Install or upgrade to **v1.4.0 or newer** (adds thread IDs and optional comment
-node IDs in the report output):
+Install or upgrade to **v1.5.0 or newer** (GraphQL-only thread resolution and minimal comment replies):
 
 ```sh
 gh extension install Agyn-sandbox/gh-pr-review
@@ -272,17 +270,13 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 | `review --submit` | GraphQL | Finalizes a pending review via `submitPullRequestReview` using the `PRR_…` review node ID (executed through the internal `gh api graphql` wrapper). |
 | `comments reply` | GraphQL | Replies via `addPullRequestReviewThreadReply`; supply `--review-id` when responding from a pending review. |
 | `threads list` | GraphQL | Enumerates review threads for the pull request. |
-| `threads resolve` / `unresolve` | GraphQL (+ REST when mapping `--comment-id`) | Mutates thread resolution with GraphQL; a REST lookup translates numeric comment IDs to node IDs. |
-| `threads find` | GraphQL (+ REST when mapping `--comment_id`) | Returns `{ "id", "isResolved" }`. |
-
-> Note: Some flows, such as mapping numeric comment IDs for thread resolution,
-> still perform REST lookups. Mutation operations themselves are GraphQL-based.
+| `threads resolve` / `unresolve` | GraphQL | Mutates thread resolution via `resolveReviewThread` / `unresolveReviewThread`; supply GraphQL thread node IDs (`PRRT_…`). |
 
 
 ## Additional docs
 
 - [docs/USAGE.md](docs/USAGE.md) — Command-by-command inputs, outputs, and
-  examples for v1.4.0.
+  examples for v1.5.0.
 - [docs/SCHEMAS.md](docs/SCHEMAS.md) — JSON schemas for each structured
   response (optional fields omitted rather than set to null).
 - [docs/AGENTS.md](docs/AGENTS.md) — Agent-focused workflows, prompts, and
@@ -311,12 +305,13 @@ Releases are built using the
 [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile)
 workflow to publish binaries for macOS, Linux, and Windows.
 
-## Release 1.4.0
+## Release 1.5.0
 
-- `review report` now surfaces GraphQL `thread_id` values by default and can
-  optionally emit per-comment `comment_node_id` fields via
-  `--include-comment-node-id`.
-- `comments reply` is fully GraphQL-based, accepts `--thread-id` (and optional
-  `--review-id` for pending reviews), and returns structured thread metadata.
+- `threads resolve` / `threads unresolve` now exclusively accept GraphQL thread
+  node IDs and emit minimal JSON `{ "thread_node_id": "…", "is_resolved": true|false }`.
+- Removed the legacy `threads find` command and the `--comment-id` lookup path
+  used to translate REST comment identifiers.
+- `comments reply` always returns the minimal `{ "comment_node_id": "PRRC_…" }`
+  payload; the `--concise` flag has been removed.
 - Documentation updates cover the new flag, reply payload, and schema changes
   required for this release.

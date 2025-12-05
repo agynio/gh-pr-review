@@ -3,9 +3,8 @@
 This guide provides ready-to-run prompts for scripted or agent-driven use of
 `gh pr-review`. All commands emit JSON with REST/GraphQL-aligned field names and
 include only values present in upstream responses (no null placeholders).
-Empty collections are emitted as `[]` instead of `null`, and the
-`comments reply --concise` mode returns `{ "id" }` when you only need the
-GraphQL comment identifier.
+Empty collections are emitted as `[]` instead of `null`; `comments reply`
+returns `{ "comment_node_id": "PRRC_…" }` for minimal responses.
 
 ## 1. Review a pull request end-to-end
 
@@ -72,17 +71,14 @@ review) when invoking `comments reply`.
 ## 3. Resolve or reopen discussion threads
 
 ```sh
-# Locate the thread for a specific comment; emits { "id", "isResolved" }
-gh pr-review threads find --comment_id 2582545223 owner/repo#42
-
-# Resolve the thread
+# Resolve the thread using its GraphQL node ID
 gh pr-review threads resolve --thread-id <thread-id> owner/repo#42
 
 # Reopen the thread if needed
 gh pr-review threads unresolve --thread-id <thread-id> owner/repo#42
 ```
 
-Take the `id` returned by `threads find` and reuse it as `<thread-id>` with
-`threads resolve` or `threads unresolve`. Responses remain JSON-only with
-GitHub-aligned field names and include only fields surfaced by the upstream
-APIs. Threads can also be resolved directly via `--comment-id` if preferred.
+Use `review report` (optionally with `--include-comment-node-id`) or
+`threads list` to gather `thread_id` values before mutating them. Thread
+mutations return minimal JSON of the form
+`{ "thread_node_id": "PRRT_…", "is_resolved": true|false }`.

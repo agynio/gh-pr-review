@@ -124,23 +124,11 @@ func TestCommentsReplyCommand(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	require.Len(t, payload, 1)
 	assert.Equal(t, "PRRC_reply", payload["comment_node_id"])
-	assert.Equal(t, "ack", payload["body"])
-	assert.Equal(t, "PRRT_thread", payload["thread_id"])
-	assert.Equal(t, "octocat", payload["author_login"])
-	assert.Equal(t, "https://example.com/comment", payload["html_url"])
-	assert.Equal(t, "internal/service.go", payload["path"])
-	assert.Equal(t, float64(101), payload["database_id"])
-	assert.Equal(t, "@@ -10,5 +10,7 @@", payload["diff_hunk"])
-	assert.Equal(t, false, payload["thread_is_resolved"])
-	assert.Equal(t, false, payload["thread_is_outdated"])
-	assert.Equal(t, "PRRC_parent", payload["reply_to_comment_id"])
-	assert.Equal(t, "PRR_pending", payload["review_id"])
-	assert.Equal(t, float64(202), payload["review_database_id"])
-	assert.Equal(t, "PENDING", payload["review_state"])
 }
 
-func TestCommentsReplyCommandConcise(t *testing.T) {
+func TestCommentsReplyCommandWithoutReviewID(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
@@ -204,7 +192,7 @@ func TestCommentsReplyCommandConcise(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body", "ack", "--concise", "octo/demo#7"})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body", "ack", "octo/demo#7"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -212,7 +200,7 @@ func TestCommentsReplyCommandConcise(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, 1, len(payload))
+	require.Len(t, payload, 1)
 	assert.Equal(t, "PRRC_reply", payload["comment_node_id"])
 }
 

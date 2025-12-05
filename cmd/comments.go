@@ -64,7 +64,6 @@ func newCommentsReplyCommand(parent *commentsOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.ThreadID, "thread-id", "", "Review thread identifier to reply to")
 	cmd.Flags().StringVar(&opts.ReviewID, "review-id", "", "GraphQL review identifier when replying inside a pending review")
 	cmd.Flags().StringVar(&opts.Body, "body", "", "Reply text")
-	cmd.Flags().BoolVar(&opts.Concise, "concise", false, "Emit minimal reply payload { \"id\" }")
 	_ = cmd.MarkFlagRequired("thread-id")
 	_ = cmd.MarkFlagRequired("body")
 
@@ -78,7 +77,6 @@ type commentsReplyOptions struct {
 	ThreadID string
 	ReviewID string
 	Body     string
-	Concise  bool
 }
 
 func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
@@ -103,11 +101,8 @@ func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
 	if err != nil {
 		return err
 	}
-	if opts.Concise {
-		if reply.CommentNodeID == "" {
-			return errors.New("reply response missing comment node id")
-		}
-		return encodeJSON(cmd, map[string]string{"comment_node_id": reply.CommentNodeID})
+	if reply.CommentNodeID == "" {
+		return errors.New("reply response missing comment node id")
 	}
-	return encodeJSON(cmd, reply)
+	return encodeJSON(cmd, map[string]string{"comment_node_id": reply.CommentNodeID})
 }
