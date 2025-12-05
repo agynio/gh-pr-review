@@ -12,6 +12,17 @@ const addThreadReplyMutation = `mutation AddPullRequestReviewThreadReply($input:
   addPullRequestReviewThreadReply(input: $input) {
     comment {
       id
+      body
+      publishedAt
+      author { login }
+    }
+  }
+}`
+
+const commentDetailsQuery = `query PullRequestReviewCommentDetails($id: ID!) {
+  node(id: $id) {
+    ... on PullRequestReviewComment {
+      id
       databaseId
       body
       diffHunk
@@ -23,7 +34,12 @@ const addThreadReplyMutation = `mutation AddPullRequestReviewThreadReply($input:
       pullRequestReview { id databaseId state }
       replyTo { id }
     }
-    thread {
+  }
+}`
+
+const threadDetailsQuery = `query PullRequestReviewThreadDetails($id: ID!) {
+  node(id: $id) {
+    ... on PullRequestReviewThread {
       id
       isResolved
       isOutdated
@@ -63,6 +79,34 @@ type Reply struct {
 	UpdatedAt        string  `json:"updated_at"`
 }
 
+type commentDetails struct {
+	ID         string  `json:"id"`
+	DatabaseID *int    `json:"databaseId"`
+	Body       string  `json:"body"`
+	DiffHunk   *string `json:"diffHunk"`
+	Path       string  `json:"path"`
+	URL        string  `json:"url"`
+	CreatedAt  string  `json:"createdAt"`
+	UpdatedAt  string  `json:"updatedAt"`
+	Author     *struct {
+		Login string `json:"login"`
+	} `json:"author"`
+	PullRequestReview *struct {
+		ID         string `json:"id"`
+		DatabaseID *int   `json:"databaseId"`
+		State      string `json:"state"`
+	} `json:"pullRequestReview"`
+	ReplyTo *struct {
+		ID string `json:"id"`
+	} `json:"replyTo"`
+}
+
+type threadDetails struct {
+	ID         string `json:"id"`
+	IsResolved bool   `json:"isResolved"`
+	IsOutdated bool   `json:"isOutdated"`
+}
+
 // NewService constructs a Service using the provided API client.
 func NewService(api ghcli.API) *Service {
 	return &Service{API: api}
@@ -91,31 +135,13 @@ func (s *Service) Reply(_ resolver.Identity, opts ReplyOptions) (Reply, error) {
 	var response struct {
 		AddPullRequestReviewThreadReply struct {
 			Comment *struct {
-				ID         string  `json:"id"`
-				DatabaseID *int    `json:"databaseId"`
-				Body       string  `json:"body"`
-				DiffHunk   *string `json:"diffHunk"`
-				Path       string  `json:"path"`
-				URL        string  `json:"url"`
-				CreatedAt  string  `json:"createdAt"`
-				UpdatedAt  string  `json:"updatedAt"`
-				Author     *struct {
+				ID          string `json:"id"`
+				Body        string `json:"body"`
+				PublishedAt string `json:"publishedAt"`
+				Author      *struct {
 					Login string `json:"login"`
 				} `json:"author"`
-				PullRequestReview *struct {
-					ID         string `json:"id"`
-					DatabaseID *int   `json:"databaseId"`
-					State      string `json:"state"`
-				} `json:"pullRequestReview"`
-				ReplyTo *struct {
-					ID string `json:"id"`
-				} `json:"replyTo"`
 			} `json:"comment"`
-			Thread *struct {
-				ID         string `json:"id"`
-				IsResolved bool   `json:"isResolved"`
-				IsOutdated bool   `json:"isOutdated"`
-			} `json:"thread"`
 		} `json:"addPullRequestReviewThreadReply"`
 	}
 
@@ -133,50 +159,86 @@ func (s *Service) Reply(_ resolver.Identity, opts ReplyOptions) (Reply, error) {
 	if comment.Author == nil || strings.TrimSpace(comment.Author.Login) == "" {
 		return Reply{}, errors.New("mutation response missing author login")
 	}
-	thread := response.AddPullRequestReviewThreadReply.Thread
-	if thread == nil || strings.TrimSpace(thread.ID) == "" {
-		return Reply{}, errors.New("mutation response missing thread id")
+	commentDetails, err := s.loadCommentDetails(comment.ID)
+	if err != nil {
+		return Reply{}, err
+	}
+
+	threadDetails, err := s.loadThreadDetails(threadID)
+	if err != nil {
+		return Reply{}, err
 	}
 
 	reply := Reply{
-		ID:               comment.ID,
-		ThreadID:         thread.ID,
-		ThreadIsResolved: thread.IsResolved,
-		ThreadIsOutdated: thread.IsOutdated,
-		Body:             comment.Body,
-		Path:             comment.Path,
-		HtmlURL:          comment.URL,
-		AuthorLogin:      comment.Author.Login,
-		CreatedAt:        comment.CreatedAt,
-		UpdatedAt:        comment.UpdatedAt,
+		ID:               commentDetails.ID,
+		ThreadID:         threadID,
+		ThreadIsResolved: threadDetails.IsResolved,
+		ThreadIsOutdated: threadDetails.IsOutdated,
+		Body:             commentDetails.Body,
+		Path:             commentDetails.Path,
+		HtmlURL:          commentDetails.URL,
+		AuthorLogin:      commentDetails.Author.Login,
+		CreatedAt:        commentDetails.CreatedAt,
+		UpdatedAt:        commentDetails.UpdatedAt,
 	}
 
-	if comment.DatabaseID != nil {
-		reply.DatabaseID = comment.DatabaseID
+	if commentDetails.DatabaseID != nil {
+		reply.DatabaseID = commentDetails.DatabaseID
 	}
-	if comment.DiffHunk != nil {
-		trimmed := strings.TrimSpace(*comment.DiffHunk)
+	if commentDetails.DiffHunk != nil {
+		trimmed := strings.TrimSpace(*commentDetails.DiffHunk)
 		if trimmed != "" {
-			value := *comment.DiffHunk
+			value := *commentDetails.DiffHunk
 			reply.DiffHunk = &value
 		}
 	}
-	if comment.PullRequestReview != nil {
-		if reviewID := strings.TrimSpace(comment.PullRequestReview.ID); reviewID != "" {
+	if commentDetails.PullRequestReview != nil {
+		if reviewID := strings.TrimSpace(commentDetails.PullRequestReview.ID); reviewID != "" {
 			reply.ReviewID = &reviewID
 		}
-		if comment.PullRequestReview.DatabaseID != nil {
-			reply.ReviewDatabaseID = comment.PullRequestReview.DatabaseID
+		if commentDetails.PullRequestReview.DatabaseID != nil {
+			reply.ReviewDatabaseID = commentDetails.PullRequestReview.DatabaseID
 		}
-		if state := strings.TrimSpace(comment.PullRequestReview.State); state != "" {
+		if state := strings.TrimSpace(commentDetails.PullRequestReview.State); state != "" {
 			reply.ReviewState = &state
 		}
 	}
-	if comment.ReplyTo != nil {
-		if replyToID := strings.TrimSpace(comment.ReplyTo.ID); replyToID != "" {
+	if commentDetails.ReplyTo != nil {
+		if replyToID := strings.TrimSpace(commentDetails.ReplyTo.ID); replyToID != "" {
 			reply.ReplyToCommentID = &replyToID
 		}
 	}
 
 	return reply, nil
+}
+
+func (s *Service) loadCommentDetails(id string) (commentDetails, error) {
+	variables := map[string]interface{}{"id": id}
+	var response struct {
+		Node *commentDetails `json:"node"`
+	}
+	if err := s.API.GraphQL(commentDetailsQuery, variables, &response); err != nil {
+		return commentDetails{}, err
+	}
+	if response.Node == nil || strings.TrimSpace(response.Node.ID) == "" {
+		return commentDetails{}, errors.New("failed to load comment details")
+	}
+	if response.Node.Author == nil || strings.TrimSpace(response.Node.Author.Login) == "" {
+		return commentDetails{}, errors.New("comment details missing author")
+	}
+	return *response.Node, nil
+}
+
+func (s *Service) loadThreadDetails(id string) (threadDetails, error) {
+	variables := map[string]interface{}{"id": id}
+	var response struct {
+		Node *threadDetails `json:"node"`
+	}
+	if err := s.API.GraphQL(threadDetailsQuery, variables, &response); err != nil {
+		return threadDetails{}, err
+	}
+	if response.Node == nil || strings.TrimSpace(response.Node.ID) == "" {
+		return threadDetails{}, errors.New("failed to load thread details")
+	}
+	return *response.Node, nil
 }
