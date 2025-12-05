@@ -16,3 +16,9 @@ jobs:
       - uses: cli/gh-extension-precompile@v2
         with:
           go_version_file: go.mod
+          targets: |
+            macOS-amd64
+            macOS-arm64
+            linux-amd64
+            linux-arm64
+            windows-amd64
