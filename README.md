@@ -33,10 +33,11 @@ The quickest path from opening a pending review to resolving threads:
 
 {
   "id": "PRR_kwDOAAABbcdEFG12",
-  "state": "PENDING",
-  "html_url": "https://github.com/owner/repo/pull/42#pullrequestreview-3531807471"
+  "state": "PENDING"
 }
    ```
+
+   Pending reviews omit `submitted_at`; the field appears after submission.
 
 3. **Add inline comments with the pending review ID (GraphQL).** The
    `review --add-comment` command fails fast if you supply a numeric ID instead

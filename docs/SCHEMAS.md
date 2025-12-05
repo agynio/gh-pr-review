@@ -26,11 +26,6 @@ Used by `review --start` and `review --submit`.
       "type": "string",
       "format": "date-time",
       "description": "RFC3339 timestamp of the submission (omitted when pending)"
-    },
-    "html_url": {
-      "type": "string",
-      "format": "uri",
-      "description": "Link to the review on GitHub"
     }
   },
   "additionalProperties": false

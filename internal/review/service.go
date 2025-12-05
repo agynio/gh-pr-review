@@ -22,7 +22,6 @@ type ReviewState struct {
 	ID          string  `json:"id"`
 	State       string  `json:"state"`
 	SubmittedAt *string `json:"submitted_at,omitempty"`
-	HTMLURL     *string `json:"html_url,omitempty"`
 }
 
 // SubmitStatus represents the outcome of a review submission mutation.
@@ -76,7 +75,7 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 
 	const mutation = `mutation($input:AddPullRequestReviewInput!){
   addPullRequestReview(input:$input){
-    pullRequestReview { id state submittedAt url }
+    pullRequestReview { id state submittedAt }
   }
 }`
 
@@ -93,7 +92,6 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 				ID          string  `json:"id"`
 				State       string  `json:"state"`
 				SubmittedAt *string `json:"submittedAt"`
-				URL         string  `json:"url"`
 			} `json:"pullRequestReview"`
 		} `json:"addPullRequestReview"`
 	}
@@ -111,11 +109,6 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 	if trimmedState == "" {
 		return nil, errors.New("addPullRequestReview returned empty state")
 	}
-	trimmedURL := strings.TrimSpace(prr.URL)
-	if trimmedURL == "" {
-		return nil, errors.New("addPullRequestReview returned empty url")
-	}
-
 	state := ReviewState{ID: trimmedID, State: trimmedState}
 
 	if prr.SubmittedAt != nil {
@@ -124,7 +117,6 @@ func (s *Service) Start(pr resolver.Identity, commitOID string) (*ReviewState, e
 			state.SubmittedAt = &trimmed
 		}
 	}
-	state.HTMLURL = &trimmedURL
 
 	return &state, nil
 }

@@ -62,7 +62,6 @@ func TestServiceStart(t *testing.T) {
 						"id":          "PRR_review",
 						"state":       "PENDING",
 						"submittedAt": nil,
-						"url":         "https://example.com/review/PRR_review",
 					},
 				},
 			}
@@ -79,8 +78,6 @@ func TestServiceStart(t *testing.T) {
 	assert.Equal(t, "PRR_review", state.ID)
 	assert.Equal(t, "PENDING", state.State)
 	require.Nil(t, state.SubmittedAt)
-	require.NotNil(t, state.HTMLURL)
-	assert.Equal(t, "https://example.com/review/PRR_review", *state.HTMLURL)
 	assert.Equal(t, 2, call)
 }
 
@@ -143,7 +140,6 @@ func TestServiceStartErrorOnEmptyState(t *testing.T) {
 					"pullRequestReview": map[string]interface{}{
 						"id":    "PRR_review",
 						"state": " ",
-						"url":   "https://example.com/review/PRR_review",
 					},
 				},
 			}
@@ -158,45 +154,6 @@ func TestServiceStartErrorOnEmptyState(t *testing.T) {
 	_, err := svc.Start(pr, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "returned empty state")
-}
-
-func TestServiceStartErrorOnEmptyURL(t *testing.T) {
-	api := &fakeAPI{}
-	step := 0
-	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		step++
-		switch step {
-		case 1:
-			payload := map[string]interface{}{
-				"repository": map[string]interface{}{
-					"pullRequest": map[string]interface{}{
-						"id":         "PRR_node",
-						"headRefOid": "abc123",
-					},
-				},
-			}
-			return assign(result, payload)
-		case 2:
-			payload := map[string]interface{}{
-				"addPullRequestReview": map[string]interface{}{
-					"pullRequestReview": map[string]interface{}{
-						"id":    "PRR_review",
-						"state": "PENDING",
-						"url":   " ",
-					},
-				},
-			}
-			return assign(result, payload)
-		default:
-			return errors.New("unexpected GraphQL call")
-		}
-	}
-
-	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	_, err := svc.Start(pr, "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "returned empty url")
 }
 
 func TestServiceAddThread(t *testing.T) {
