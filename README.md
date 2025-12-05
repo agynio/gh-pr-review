@@ -23,8 +23,6 @@ The quickest path from opening a pending review to resolving threads:
    gh extension upgrade Agyn-sandbox/gh-pr-review
    ```
 
-   > v1.3.3 and newer ship precompiled linux-arm64 binaries in addition to the
-   > existing macOS, Windows, and Linux targets.
 
 2. **Start a pending review (GraphQL).** Capture the returned `id` (GraphQL
    node).
@@ -32,10 +30,10 @@ The quickest path from opening a pending review to resolving threads:
    ```sh
    gh pr-review review --start owner/repo#42
 
-{
-  "id": "PRR_kwDOAAABbcdEFG12",
-  "state": "PENDING"
-}
+   {
+     "id": "PRR_kwDOAAABbcdEFG12",
+     "state": "PENDING"
+   }
    ```
 
    Pending reviews omit `submitted_at`; the field appears after submission.
