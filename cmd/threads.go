@@ -20,7 +20,6 @@ func newThreadsCommand() *cobra.Command {
 	cmd.AddCommand(newThreadsListCommand())
 	cmd.AddCommand(newThreadsResolveCommand())
 	cmd.AddCommand(newThreadsUnresolveCommand())
-	cmd.AddCommand(newThreadsFindCommand())
 
 	return cmd
 }
@@ -117,7 +116,6 @@ func newThreadsMutationCommand(resolve bool) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.ThreadID, "thread-id", "", "GraphQL node ID for the review thread")
-	cmd.Flags().Int64Var(&opts.CommentID, "comment-id", 0, "Pull request review comment identifier")
 	cmd.PersistentFlags().StringVarP(&opts.Repo, "repo", "R", "", "Repository in 'owner/repo' format")
 	cmd.PersistentFlags().IntVar(&opts.Pull, "pr", 0, "Pull request number")
 
@@ -125,22 +123,15 @@ func newThreadsMutationCommand(resolve bool) *cobra.Command {
 }
 
 type threadsMutationOptions struct {
-	Repo      string
-	Pull      int
-	Selector  string
-	ThreadID  string
-	CommentID int64
+	Repo     string
+	Pull     int
+	Selector string
+	ThreadID string
 }
 
 func (o *threadsMutationOptions) Validate() error {
-	hasThread := strings.TrimSpace(o.ThreadID) != ""
-	hasComment := o.CommentID > 0
-
-	switch {
-	case hasThread && hasComment:
-		return errors.New("specify either --thread-id or --comment-id, not both")
-	case !hasThread && !hasComment:
-		return errors.New("must provide --thread-id or --comment-id")
+	if strings.TrimSpace(o.ThreadID) == "" {
+		return errors.New("--thread-id is required")
 	}
 	return nil
 }
@@ -166,7 +157,7 @@ func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolv
 	}
 
 	service := threads.NewService(apiClientFactory(identity.Host))
-	action := threads.ActionOptions{ThreadID: strings.TrimSpace(opts.ThreadID), CommentID: opts.CommentID}
+	action := threads.ActionOptions{ThreadID: strings.TrimSpace(opts.ThreadID)}
 
 	var result threads.ActionResult
 	if resolve {
@@ -177,70 +168,5 @@ func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolv
 	if err != nil {
 		return err
 	}
-	return encodeJSON(cmd, result)
-}
-
-func newThreadsFindCommand() *cobra.Command {
-	opts := &threadsFindOptions{}
-
-	cmd := &cobra.Command{
-		Use:   "find [<number> | <url> | <owner>/<repo>#<number>]",
-		Short: "Locate a review thread by thread or comment identifier",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				opts.Selector = args[0]
-			}
-			return runThreadsFind(cmd, opts)
-		},
-	}
-
-	cmd.Flags().StringVarP(&opts.Repo, "repo", "R", "", "Repository in 'owner/repo' format")
-	cmd.Flags().IntVar(&opts.Pull, "pr", 0, "Pull request number")
-	cmd.Flags().StringVar(&opts.ThreadID, "thread_id", "", "GraphQL thread node ID")
-	cmd.Flags().Int64Var(&opts.CommentID, "comment_id", 0, "Review comment identifier")
-
-	return cmd
-}
-
-type threadsFindOptions struct {
-	Repo      string
-	Pull      int
-	Selector  string
-	ThreadID  string
-	CommentID int64
-}
-
-func runThreadsFind(cmd *cobra.Command, opts *threadsFindOptions) error {
-	threadIDProvided := strings.TrimSpace(opts.ThreadID) != ""
-	commentProvided := opts.CommentID > 0
-
-	switch {
-	case threadIDProvided && commentProvided:
-		return errors.New("specify either --thread_id or --comment_id, not both")
-	case !threadIDProvided && !commentProvided:
-		return errors.New("must provide --thread_id or --comment_id")
-	}
-
-	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
-	if err != nil {
-		return err
-	}
-
-	hostEnv := os.Getenv("GH_HOST")
-	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
-	if err != nil {
-		return err
-	}
-
-	service := threads.NewService(apiClientFactory(identity.Host))
-	result, err := service.Find(identity, threads.FindOptions{
-		ThreadID:  opts.ThreadID,
-		CommentID: opts.CommentID,
-	})
-	if err != nil {
-		return err
-	}
-
 	return encodeJSON(cmd, result)
 }

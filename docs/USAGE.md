@@ -1,4 +1,4 @@
-# Usage reference (v1.4.0)
+# Usage reference (v1.5.0)
 
 All commands accept pull request selectors in any GitHub CLI format:
 
@@ -145,7 +145,7 @@ gh pr-review review --submit \
 > before mutating threads or
 > replying.
 
-## comments reply (GraphQL, optional concise mode)
+## comments reply (GraphQL only)
 
 - **Purpose:** Reply to a review thread.
 - **Inputs:**
@@ -153,44 +153,13 @@ gh pr-review review --submit \
   - `--review-id`: GraphQL review identifier when replying inside your pending
     review (`PRR_…`).
   - `--body` **(required).**
-  - `--concise`: Emit the minimal `{ "comment_node_id": "<comment-id>" }` response.
 - **Backend:** GitHub GraphQL `addPullRequestReviewThreadReply` mutation.
-- **Output schema:**
-  - Default: [`ReplyComment`](SCHEMAS.md#replycomment).
-  - `--concise`: [`ReplyConcise`](SCHEMAS.md#replyconcise).
+- **Output schema:** [`ReplyMinimal`](SCHEMAS.md#replyminimal).
 
 ```sh
-# Full GraphQL payload
-gh pr-review comments reply \
-  --thread-id PRRT_kwDOAAABbFg12345 \
-  --review-id PRR_kwDOAAABbcdEFG12 \
-  --body "Thanks for catching this" \
-  owner/repo#42
-
-{
-  "comment_node_id": "PRRC_kwDOAAABbhi7890",
-  "database_id": 1122334455,
-  "review_id": "PRR_kwDOAAABbcdEFG12",
-  "review_database_id": 3531807471,
-  "review_state": "PENDING",
-  "thread_id": "PRRT_kwDOAAABbFg12345",
-  "thread_is_resolved": false,
-  "thread_is_outdated": false,
-  "reply_to_comment_id": "PRRC_kwDOAAABbparent",
-  "body": "Thanks for catching this",
-  "diff_hunk": "@@ -10,5 +10,7 @@",
-  "path": "internal/service.go",
-  "html_url": "https://github.com/owner/repo/pull/42#discussion_r1122334455",
-  "author_login": "octocat",
-  "created_at": "2025-12-19T18:35:02Z",
-  "updated_at": "2025-12-19T18:35:02Z"
-}
-
-# Concise payload
 gh pr-review comments reply \
   --thread-id PRRT_kwDOAAABbFg12345 \
   --body "Ack" \
-  --concise \
   owner/repo#42
 
 {
@@ -222,31 +191,21 @@ gh pr-review threads list --unresolved --mine owner/repo#42
 ]
 ```
 
-## threads resolve / threads unresolve (GraphQL + REST lookup when needed)
+## threads resolve / threads unresolve (GraphQL only)
 
 - **Purpose:** Resolve or reopen a review thread.
 - **Inputs:**
-  - Provide either `--thread-id` (GraphQL node) or `--comment-id` (REST review
-    comment). Supplying both is rejected.
-- **Backend:**
-  - GraphQL mutations `resolveReviewThread` / `unresolveReviewThread`.
-  - REST `GET /pulls/comments/{comment_id}` when mapping a numeric comment ID to
-    a thread node.
-- **Output schema:** [`ThreadActionResult`](SCHEMAS.md#threadactionresult).
+  - `--thread-id` **(required):** GraphQL review thread node ID (`PRRT_…`).
+- **Backend:** GraphQL mutations `resolveReviewThread` / `unresolveReviewThread`.
+- **Output schema:** [`ThreadMutationResult`](SCHEMAS.md#threadmutationresult).
 
 ```sh
-# Resolve by GraphQL thread id
 gh pr-review threads resolve --thread-id R_ywDoABC123 owner/repo#42
 
-# Resolve by comment id (REST lookup + GraphQL mutation)
-gh pr-review threads resolve --comment-id 2582545223 owner/repo#42
-
 {
-  "threadId": "R_ywDoABC123",
-  "isResolved": true,
-  "changed": true
+  "thread_node_id": "R_ywDoABC123",
+  "is_resolved": true
 }
 ```
 
-`threads unresolve` emits the same schema, with `isResolved` equal to `false`
-after reopening the thread.
+`threads unresolve` emits the same schema with `is_resolved` set to `false`.

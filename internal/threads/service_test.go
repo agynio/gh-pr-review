@@ -216,7 +216,6 @@ func TestServiceListUnresolvedEmptyReturnsSlice(t *testing.T) {
 func TestResolveRequiresPermission(t *testing.T) {
 	svc := &Service{}
 	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
 		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
 			switch query {
 			case threadDetailsQuery:
@@ -245,7 +244,6 @@ func TestResolveNoop(t *testing.T) {
 	svc := &Service{}
 	callCount := 0
 	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
 		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
 			switch query {
 			case threadDetailsQuery:
@@ -268,34 +266,17 @@ func TestResolveNoop(t *testing.T) {
 	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
 	res, err := svc.Resolve(identity, ActionOptions{ThreadID: "T2"})
 	require.NoError(t, err)
-	assert.False(t, res.Changed)
 	assert.True(t, res.IsResolved)
-	assert.Equal(t, "T2", res.ThreadID)
+	assert.Equal(t, "T2", res.ThreadNodeID)
 	assert.Equal(t, 1, callCount)
 }
 
-func TestResolveViaCommentID(t *testing.T) {
+func TestResolveMutatesThread(t *testing.T) {
 	svc := &Service{}
 	mutationCalled := false
 	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-			if path == "repos/octo/demo/pulls/comments/9" {
-				return assign(result, map[string]interface{}{"node_id": "C_node"})
-			}
-			return errors.New("unexpected REST path: " + path)
-		}),
 		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
 			switch query {
-			case commentThreadQuery:
-				require.Equal(t, "C_node", variables["id"])
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"pullRequestReviewThread": map[string]interface{}{
-							"id": "T3",
-						},
-					},
-				}
-				return assign(result, payload)
 			case threadDetailsQuery:
 				require.Equal(t, "T3", variables["id"])
 				payload := map[string]interface{}{
@@ -325,101 +306,16 @@ func TestResolveViaCommentID(t *testing.T) {
 	}
 
 	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
-	res, err := svc.Resolve(identity, ActionOptions{CommentID: 9})
+	res, err := svc.Resolve(identity, ActionOptions{ThreadID: "T3"})
 	require.NoError(t, err)
-	assert.True(t, res.Changed)
-	assert.True(t, res.IsResolved)
-	assert.Equal(t, "T3", res.ThreadID)
 	assert.True(t, mutationCalled)
-}
-
-func TestResolveFallsBackToThreadScanOnSchemaError(t *testing.T) {
-	svc := &Service{}
-	mutationCalled := false
-	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-			if path == "repos/octo/demo/pulls/comments/11" {
-				return assign(result, map[string]interface{}{"node_id": "C_bad"})
-			}
-			return errors.New("unexpected REST path: " + path)
-		}),
-		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
-			switch query {
-			case commentThreadQuery:
-				return errors.New("Field 'pullRequestReviewThread' doesn't exist")
-			case listThreadsQuery:
-				require.Equal(t, "PR_node", variables["id"])
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"reviewThreads": map[string]interface{}{
-							"nodes": []map[string]interface{}{
-								{
-									"id":                 "T4",
-									"isResolved":         false,
-									"isOutdated":         false,
-									"path":               "main.go",
-									"viewerCanResolve":   true,
-									"viewerCanUnresolve": true,
-									"comments": map[string]interface{}{
-										"nodes": []map[string]interface{}{
-											{
-												"viewerDidAuthor": false,
-												"updatedAt":       time.Date(2025, 12, 2, 15, 0, 0, 0, time.UTC),
-												"databaseId":      11,
-											},
-										},
-									},
-								},
-							},
-							"pageInfo": map[string]interface{}{
-								"hasNextPage": false,
-								"endCursor":   "",
-							},
-						},
-					},
-				}
-				return assign(result, payload)
-			case threadDetailsQuery:
-				require.Equal(t, "T4", variables["id"])
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"id":                 "T4",
-						"isResolved":         false,
-						"viewerCanResolve":   true,
-						"viewerCanUnresolve": true,
-					},
-				}
-				return assign(result, payload)
-			case resolveThreadMutation:
-				mutationCalled = true
-				payload := map[string]interface{}{
-					"resolveReviewThread": map[string]interface{}{
-						"thread": map[string]interface{}{
-							"id":         "T4",
-							"isResolved": true,
-						},
-					},
-				}
-				return assign(result, payload)
-			default:
-				return errors.New("unexpected query")
-			}
-		},
-	}
-
-	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
-	res, err := svc.Resolve(identity, ActionOptions{CommentID: 11})
-	require.NoError(t, err)
-	assert.True(t, res.Changed)
 	assert.True(t, res.IsResolved)
-	assert.Equal(t, "T4", res.ThreadID)
-	assert.True(t, mutationCalled)
+	assert.Equal(t, "T3", res.ThreadNodeID)
 }
 
 func TestUnresolveRequiresPermission(t *testing.T) {
 	svc := &Service{}
 	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
 		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
 			switch query {
 			case threadDetailsQuery:
@@ -448,7 +344,6 @@ func TestUnresolveNoop(t *testing.T) {
 	svc := &Service{}
 	callCount := 0
 	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
 		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
 			switch query {
 			case threadDetailsQuery:
@@ -471,33 +366,17 @@ func TestUnresolveNoop(t *testing.T) {
 	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
 	res, err := svc.Unresolve(identity, ActionOptions{ThreadID: "T8"})
 	require.NoError(t, err)
-	assert.False(t, res.Changed)
 	assert.False(t, res.IsResolved)
-	assert.Equal(t, "T8", res.ThreadID)
+	assert.Equal(t, "T8", res.ThreadNodeID)
 	assert.Equal(t, 1, callCount)
 }
 
-func TestUnresolveViaCommentID(t *testing.T) {
+func TestUnresolveMutatesThread(t *testing.T) {
 	svc := &Service{}
 	mutationCalled := false
 	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-			if path == "repos/octo/demo/pulls/comments/13" {
-				return assign(result, map[string]interface{}{"node_id": "C_unresolve"})
-			}
-			return errors.New("unexpected REST path: " + path)
-		}),
 		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
 			switch query {
-			case commentThreadQuery:
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"pullRequestReviewThread": map[string]interface{}{
-							"id": "T9",
-						},
-					},
-				}
-				return assign(result, payload)
 			case threadDetailsQuery:
 				payload := map[string]interface{}{
 					"node": map[string]interface{}{
@@ -526,97 +405,11 @@ func TestUnresolveViaCommentID(t *testing.T) {
 	}
 
 	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5}
-	res, err := svc.Unresolve(identity, ActionOptions{CommentID: 13})
+	res, err := svc.Unresolve(identity, ActionOptions{ThreadID: "T9"})
 	require.NoError(t, err)
-	assert.True(t, res.Changed)
-	assert.False(t, res.IsResolved)
-	assert.Equal(t, "T9", res.ThreadID)
 	assert.True(t, mutationCalled)
-}
-
-func TestFindByThreadID(t *testing.T) {
-	svc := &Service{}
-	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", nil),
-		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
-			switch query {
-			case threadDetailsQuery:
-				require.Equal(t, "T-thread", variables["id"])
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"id":         "T-thread",
-						"isResolved": true,
-					},
-				}
-				return assign(result, payload)
-			default:
-				return errors.New("unexpected query")
-			}
-		},
-	}
-
-	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5, Host: "github.com"}
-	res, err := svc.Find(identity, FindOptions{ThreadID: "T-thread"})
-	require.NoError(t, err)
-	assert.Equal(t, "T-thread", res.ID)
-	assert.True(t, res.IsResolved)
-}
-
-func TestFindByCommentIDFallback(t *testing.T) {
-	svc := &Service{}
-	svc.API = &fakeAPI{
-		restFunc: restStub(t, "octo", "demo", "octo/demo", 5, "PR_node", func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-			if path == "repos/octo/demo/pulls/comments/900" {
-				return assign(result, map[string]interface{}{"node_id": "C-node"})
-			}
-			return errors.New("unexpected REST path: " + path)
-		}),
-		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
-			switch query {
-			case commentThreadQuery:
-				return errors.New("field PullRequestReviewThread does not exist on GHES")
-			case listThreadsQuery:
-				require.Equal(t, "PR_node", variables["id"])
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"reviewThreads": map[string]interface{}{
-							"nodes": []map[string]interface{}{
-								{
-									"id":         "T-fallback",
-									"isResolved": false,
-									"isOutdated": false,
-									"path":       "file.go",
-									"comments": map[string]interface{}{
-										"nodes": []map[string]interface{}{
-											{"databaseId": float64(900), "viewerDidAuthor": false, "updatedAt": time.Now()},
-										},
-									},
-								},
-							},
-							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
-						},
-					},
-				}
-				return assign(result, payload)
-			case threadDetailsQuery:
-				payload := map[string]interface{}{
-					"node": map[string]interface{}{
-						"id":         "T-fallback",
-						"isResolved": false,
-					},
-				}
-				return assign(result, payload)
-			default:
-				return errors.New("unexpected query")
-			}
-		},
-	}
-
-	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 5, Host: "github.com"}
-	res, err := svc.Find(identity, FindOptions{CommentID: 900})
-	require.NoError(t, err)
-	assert.Equal(t, "T-fallback", res.ID)
 	assert.False(t, res.IsResolved)
+	assert.Equal(t, "T9", res.ThreadNodeID)
 }
 
 func assign(dst interface{}, payload interface{}) error {

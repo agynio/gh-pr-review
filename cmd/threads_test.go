@@ -101,39 +101,20 @@ func TestThreadsListCommandOutputsJSON(t *testing.T) {
 	assert.Equal(t, float64(27), payload[0]["line"])
 }
 
-func TestThreadsResolveCommandByCommentID(t *testing.T) {
+func TestThreadsResolveCommandByThreadID(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
 	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		if method != "GET" {
-			return errors.New("unexpected method")
-		}
-		switch path {
-		case "repos/octo/demo":
-			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
-		case "repos/octo/demo/pulls/9":
-			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
-		case "repos/octo/demo/pulls/comments/88":
-			return assignJSON(result, map[string]interface{}{"node_id": "C_node"})
-		default:
-			return errors.New("unexpected path")
-		}
+		return errors.New("unexpected REST call")
 	}
 	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
 		switch {
-		case strings.Contains(query, "CommentThread"):
-			payload := map[string]interface{}{
-				"node": map[string]interface{}{
-					"pullRequestReviewThread": map[string]interface{}{"id": "T_comment"},
-				},
-			}
-			return assignJSON(result, payload)
 		case strings.Contains(query, "ThreadDetails"):
 			payload := map[string]interface{}{
 				"node": map[string]interface{}{
-					"id":                 "T_comment",
+					"id":                 "T_thread",
 					"isResolved":         false,
 					"viewerCanResolve":   true,
 					"viewerCanUnresolve": true,
@@ -144,7 +125,7 @@ func TestThreadsResolveCommandByCommentID(t *testing.T) {
 			payload := map[string]interface{}{
 				"resolveReviewThread": map[string]interface{}{
 					"thread": map[string]interface{}{
-						"id":         "T_comment",
+						"id":         "T_thread",
 						"isResolved": true,
 					},
 				},
@@ -161,7 +142,7 @@ func TestThreadsResolveCommandByCommentID(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"threads", "resolve", "--comment-id", "88", "octo/demo#9"})
+	root.SetArgs([]string{"threads", "resolve", "--thread-id", "T_thread", "octo/demo#9"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -169,9 +150,8 @@ func TestThreadsResolveCommandByCommentID(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, "T_comment", payload["threadId"])
-	assert.Equal(t, true, payload["changed"])
-	assert.Equal(t, true, payload["isResolved"])
+	assert.Equal(t, "T_thread", payload["thread_node_id"])
+	assert.Equal(t, true, payload["is_resolved"])
 }
 
 func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
@@ -180,17 +160,7 @@ func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
 
 	fake := &commandFakeAPI{}
 	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		if method != "GET" {
-			return errors.New("unexpected method")
-		}
-		switch path {
-		case "repos/octo/demo":
-			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
-		case "repos/octo/demo/pulls/9":
-			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
-		default:
-			return errors.New("unexpected path")
-		}
+		return errors.New("unexpected REST call")
 	}
 	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
 		switch {
@@ -233,58 +203,8 @@ func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, "T_thread", payload["threadId"])
-	assert.Equal(t, true, payload["changed"])
-	assert.Equal(t, false, payload["isResolved"])
-}
-
-func TestThreadsFindCommandByThreadID(t *testing.T) {
-	originalFactory := apiClientFactory
-	defer func() { apiClientFactory = originalFactory }()
-
-	fake := &commandFakeAPI{}
-	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		if method != "GET" {
-			return errors.New("unexpected method")
-		}
-		switch path {
-		case "repos/octo/demo":
-			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
-		case "repos/octo/demo/pulls/5":
-			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
-		default:
-			return errors.New("unexpected path")
-		}
-	}
-	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		if !strings.Contains(query, "ThreadDetails") {
-			return errors.New("unexpected query")
-		}
-		payload := map[string]interface{}{
-			"node": map[string]interface{}{
-				"id":         "T-find",
-				"isResolved": true,
-			},
-		}
-		return assignJSON(result, payload)
-	}
-	apiClientFactory = func(host string) ghcli.API { return fake }
-
-	root := newRootCommand()
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	root.SetOut(stdout)
-	root.SetErr(stderr)
-	root.SetArgs([]string{"threads", "find", "--thread_id", "T-find", "octo/demo#5"})
-
-	err := root.Execute()
-	require.NoError(t, err)
-	assert.Empty(t, stderr.String())
-
-	var payload map[string]interface{}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, "T-find", payload["id"])
-	assert.Equal(t, true, payload["isResolved"])
+	assert.Equal(t, "T_thread", payload["thread_node_id"])
+	assert.Equal(t, false, payload["is_resolved"])
 }
 
 func TestThreadsUnresolveRequiresIdentifier(t *testing.T) {
@@ -295,16 +215,16 @@ func TestThreadsUnresolveRequiresIdentifier(t *testing.T) {
 
 	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "thread-id or --comment-id")
+	assert.Contains(t, err.Error(), "--thread-id is required")
 }
 
-func TestThreadsResolveRequiresExclusiveSelector(t *testing.T) {
+func TestThreadsResolveRequiresThreadID(t *testing.T) {
 	root := newRootCommand()
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"threads", "resolve", "--thread-id", "T1", "--comment-id", "2", "octo/demo#1"})
+	root.SetArgs([]string{"threads", "resolve", "octo/demo#1"})
 
 	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "either --thread-id or --comment-id")
+	assert.Contains(t, err.Error(), "--thread-id is required")
 }

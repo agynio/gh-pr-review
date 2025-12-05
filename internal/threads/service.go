@@ -40,27 +40,13 @@ type Thread struct {
 
 // ActionOptions controls resolve/unresolve operations.
 type ActionOptions struct {
-	ThreadID  string
-	CommentID int64
+	ThreadID string
 }
 
 // ActionResult captures the outcome of a resolve/unresolve mutation.
 type ActionResult struct {
-	ThreadID   string `json:"threadId"`
-	IsResolved bool   `json:"isResolved"`
-	Changed    bool   `json:"changed"`
-}
-
-// FindOptions configures lookup of a specific review thread.
-type FindOptions struct {
-	ThreadID  string
-	CommentID int64
-}
-
-// FindResult exposes the minimal schema required by callers when locating threads.
-type FindResult struct {
-	ID         string `json:"id"`
-	IsResolved bool   `json:"isResolved"`
+	ThreadNodeID string `json:"thread_node_id"`
+	IsResolved   bool   `json:"is_resolved"`
 }
 
 type pullContext struct {
@@ -166,40 +152,6 @@ func (s *Service) Resolve(pr resolver.Identity, opts ActionOptions) (ActionResul
 // Unresolve reopens a thread when permitted.
 func (s *Service) Unresolve(pr resolver.Identity, opts ActionOptions) (ActionResult, error) {
 	return s.changeResolution(pr, opts, false)
-}
-
-// Find returns the thread identifier and resolution state derived from either a thread or comment ID.
-func (s *Service) Find(pr resolver.Identity, opts FindOptions) (FindResult, error) {
-	threadID := strings.TrimSpace(opts.ThreadID)
-	hasThread := threadID != ""
-	hasComment := opts.CommentID > 0
-
-	switch {
-	case hasThread && hasComment:
-		return FindResult{}, errors.New("specify either --thread_id or --comment_id, not both")
-	case !hasThread && !hasComment:
-		return FindResult{}, errors.New("must provide --thread_id or --comment_id")
-	}
-
-	ctx, err := s.loadPullContext(pr)
-	if err != nil {
-		return FindResult{}, err
-	}
-
-	if !hasThread {
-		resolvedID, err := s.resolveThreadID(ctx, ActionOptions{CommentID: opts.CommentID})
-		if err != nil {
-			return FindResult{}, err
-		}
-		threadID = resolvedID
-	}
-
-	thread, err := s.fetchThread(ctx.identity.Host, threadID)
-	if err != nil {
-		return FindResult{}, err
-	}
-
-	return FindResult{ID: thread.ID, IsResolved: thread.IsResolved}, nil
 }
 
 type threadsQueryResponse struct {
@@ -318,24 +270,19 @@ func (s *Service) loadPullContext(pr resolver.Identity) (pullContext, error) {
 }
 
 func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, resolve bool) (ActionResult, error) {
-	ctx, err := s.loadPullContext(pr)
-	if err != nil {
-		return ActionResult{}, err
+	threadID := strings.TrimSpace(opts.ThreadID)
+	if threadID == "" {
+		return ActionResult{}, errors.New("thread id is required")
 	}
 
-	threadID, err := s.resolveThreadID(ctx, opts)
-	if err != nil {
-		return ActionResult{}, err
-	}
-
-	thread, err := s.fetchThread(ctx.identity.Host, threadID)
+	thread, err := s.fetchThread(pr.Host, threadID)
 	if err != nil {
 		return ActionResult{}, err
 	}
 
 	desired := resolve
 	if thread.IsResolved == desired {
-		return ActionResult{ThreadID: thread.ID, IsResolved: thread.IsResolved, Changed: false}, nil
+		return ActionResult{ThreadNodeID: thread.ID, IsResolved: thread.IsResolved}, nil
 	}
 
 	if resolve && !thread.ViewerCanResolve {
@@ -349,73 +296,6 @@ func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, res
 		return s.performResolve(threadID)
 	}
 	return s.performUnresolve(threadID)
-}
-
-func (s *Service) resolveThreadID(ctx pullContext, opts ActionOptions) (string, error) {
-	if opts.ThreadID != "" && opts.CommentID > 0 {
-		return "", errors.New("specify either --thread-id or --comment-id, not both")
-	}
-	if opts.ThreadID == "" && opts.CommentID == 0 {
-		return "", errors.New("must provide --thread-id or --comment-id")
-	}
-	if opts.ThreadID != "" {
-		return opts.ThreadID, nil
-	}
-
-	var comment struct {
-		NodeID string `json:"node_id"`
-	}
-	path := fmt.Sprintf("repos/%s/%s/pulls/comments/%d", ctx.identity.Owner, ctx.identity.Repo, opts.CommentID)
-	if err := s.API.REST("GET", path, nil, nil, &comment); err != nil {
-		return "", fmt.Errorf("comment %d not found on %s: %w", opts.CommentID, ctx.identity.Host, err)
-	}
-	if strings.TrimSpace(comment.NodeID) == "" {
-		return "", fmt.Errorf("comment %d missing node identifier on %s", opts.CommentID, ctx.identity.Host)
-	}
-
-	threadID, err := s.lookupThreadID(comment.NodeID)
-	if err != nil {
-		if isReviewThreadSchemaError(err) {
-			return s.findThreadByComment(ctx, opts.CommentID)
-		}
-		return "", err
-	}
-	return threadID, nil
-}
-
-func (s *Service) findThreadByComment(ctx pullContext, commentID int64) (string, error) {
-	nodes, err := s.collectThreads(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	for _, node := range nodes {
-		for _, comment := range node.Comments.Nodes {
-			if comment.DatabaseID == commentID {
-				return node.ID, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("comment %d not found in pull request %s/%s#%d on %s", commentID, ctx.identity.Owner, ctx.identity.Repo, ctx.identity.Number, ctx.identity.Host)
-}
-
-func (s *Service) lookupThreadID(commentNodeID string) (string, error) {
-	variables := map[string]interface{}{"id": commentNodeID}
-	var resp struct {
-		Node *struct {
-			PullRequestReviewThread *struct {
-				ID string `json:"id"`
-			} `json:"pullRequestReviewThread"`
-		} `json:"node"`
-	}
-	if err := s.API.GraphQL(commentThreadQuery, variables, &resp); err != nil {
-		return "", err
-	}
-	if resp.Node == nil || resp.Node.PullRequestReviewThread == nil {
-		return "", fmt.Errorf("no thread found for comment node %s", commentNodeID)
-	}
-	return resp.Node.PullRequestReviewThread.ID, nil
 }
 
 func (s *Service) fetchThread(host, threadID string) (*threadDetails, error) {
@@ -452,7 +332,7 @@ func (s *Service) performResolve(threadID string) (ActionResult, error) {
 	if err := s.API.GraphQL(resolveThreadMutation, variables, &resp); err != nil {
 		return ActionResult{}, err
 	}
-	return ActionResult{ThreadID: resp.Resolve.Thread.ID, IsResolved: resp.Resolve.Thread.IsResolved, Changed: true}, nil
+	return ActionResult{ThreadNodeID: resp.Resolve.Thread.ID, IsResolved: resp.Resolve.Thread.IsResolved}, nil
 }
 
 func (s *Service) performUnresolve(threadID string) (ActionResult, error) {
@@ -468,18 +348,7 @@ func (s *Service) performUnresolve(threadID string) (ActionResult, error) {
 	if err := s.API.GraphQL(unresolveThreadMutation, variables, &resp); err != nil {
 		return ActionResult{}, err
 	}
-	return ActionResult{ThreadID: resp.Unresolve.Thread.ID, IsResolved: resp.Unresolve.Thread.IsResolved, Changed: true}, nil
-}
-
-func isReviewThreadSchemaError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	if !strings.Contains(msg, "pullrequestreviewthread") {
-		return false
-	}
-	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "doesn't exist") || strings.Contains(msg, "cannot query field")
+	return ActionResult{ThreadNodeID: resp.Unresolve.Thread.ID, IsResolved: resp.Unresolve.Thread.IsResolved}, nil
 }
 
 const listThreadsQuery = `
@@ -508,18 +377,6 @@ query Threads($id: ID!, $after: String) {
           hasNextPage
           endCursor
         }
-      }
-    }
-  }
-}
-`
-
-const commentThreadQuery = `
-query CommentThread($id: ID!) {
-  node(id: $id) {
-    ... on PullRequestReviewComment {
-      pullRequestReviewThread {
-        id
       }
     }
   }

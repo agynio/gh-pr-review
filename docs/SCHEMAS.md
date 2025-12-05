@@ -1,4 +1,4 @@
-# Output schemas (v1.4.0)
+# Output schemas (v1.5.0)
 
 Optional fields are omitted entirely (never serialized as `null`). Unless noted,
 schemas disallow additional properties to surface unexpected payload changes.
@@ -192,101 +192,20 @@ Emitted by `review report`.
 }
 ```
 
-## ReplyComment
+## ReplyMinimal
 
-Default payload from `comments reply`.
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReplyComment",
-  "type": "object",
-  "required": [
-    "comment_node_id",
-    "thread_id",
-    "thread_is_resolved",
-    "thread_is_outdated",
-    "body",
-    "author_login",
-    "html_url",
-    "created_at",
-    "updated_at"
-  ],
-  "properties": {
-    "comment_node_id": {
-      "type": "string",
-      "description": "GraphQL comment node identifier"
-    },
-    "database_id": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Numeric comment identifier when persisted"
-    },
-    "review_id": {
-      "type": "string",
-      "description": "GraphQL review identifier when attached to a review"
-    },
-    "review_database_id": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "review_state": {
-      "type": "string"
-    },
-    "thread_id": {
-      "type": "string"
-    },
-    "thread_is_resolved": {
-      "type": "boolean"
-    },
-    "thread_is_outdated": {
-      "type": "boolean"
-    },
-    "reply_to_comment_id": {
-      "type": "string"
-    },
-    "body": {
-      "type": "string"
-    },
-    "diff_hunk": {
-      "type": "string"
-    },
-    "path": {
-      "type": "string"
-    },
-    "html_url": {
-      "type": "string",
-      "format": "uri"
-    },
-    "author_login": {
-      "type": "string"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "updated_at": {
-      "type": "string",
-      "format": "date-time"
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-## ReplyConcise
-
-Minimal payload from `comments reply --concise`.
+Returned by `comments reply`.
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReplyConcise",
+  "title": "ReplyMinimal",
   "type": "object",
   "required": ["comment_node_id"],
   "properties": {
     "comment_node_id": {
-      "type": "string"
+      "type": "string",
+      "description": "GraphQL comment node identifier"
     }
   },
   "additionalProperties": false
@@ -333,48 +252,21 @@ Returned by `threads list`.
 }
 ```
 
-## ThreadActionResult
+## ThreadMutationResult
 
-Emitted by `threads resolve` and `threads unresolve`.
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ThreadActionResult",
-  "type": "object",
-  "required": ["threadId", "isResolved", "changed"],
-  "properties": {
-    "threadId": {
-      "type": "string"
-    },
-    "isResolved": {
-      "type": "boolean"
-    },
-    "changed": {
-      "type": "boolean",
-      "description": "False when the thread already matched the requested state"
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-## ThreadFindResult
-
-Returned by `threads find` and used internally when mapping REST comment IDs to
-GraphQL threads.
+Returned by `threads resolve` and `threads unresolve`.
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ThreadFindResult",
+  "title": "ThreadMutationResult",
   "type": "object",
-  "required": ["id", "isResolved"],
+  "required": ["thread_node_id", "is_resolved"],
   "properties": {
-    "id": {
+    "thread_node_id": {
       "type": "string"
     },
-    "isResolved": {
+    "is_resolved": {
       "type": "boolean"
     }
   },
