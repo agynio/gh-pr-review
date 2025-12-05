@@ -78,12 +78,12 @@ func TestCommentsReplyCommand(t *testing.T) {
 						"databaseId": 202,
 						"state":      "PENDING",
 					},
-					"pullRequestReviewThread": map[string]interface{}{
-						"id":         "PRRT_thread",
-						"isResolved": false,
-						"isOutdated": false,
-					},
 					"replyTo": map[string]interface{}{"id": "PRRC_parent"},
+				},
+				"thread": map[string]interface{}{
+					"id":         "PRRT_thread",
+					"isResolved": false,
+					"isOutdated": false,
 				},
 			},
 		}
@@ -147,12 +147,12 @@ func TestCommentsReplyCommandConcise(t *testing.T) {
 					"updatedAt":         "2025-12-03T10:05:00Z",
 					"author":            map[string]interface{}{"login": "octocat"},
 					"pullRequestReview": nil,
-					"pullRequestReviewThread": map[string]interface{}{
-						"id":         "PRRT_thread",
-						"isResolved": true,
-						"isOutdated": false,
-					},
-					"replyTo": nil,
+					"replyTo":           nil,
+				},
+				"thread": map[string]interface{}{
+					"id":         "PRRT_thread",
+					"isResolved": true,
+					"isOutdated": false,
 				},
 			},
 		}

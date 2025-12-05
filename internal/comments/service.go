@@ -21,8 +21,12 @@ const addThreadReplyMutation = `mutation AddPullRequestReviewThreadReply($input:
       updatedAt
       author { login }
       pullRequestReview { id databaseId state }
-      pullRequestReviewThread { id isResolved isOutdated }
       replyTo { id }
+    }
+    thread {
+      id
+      isResolved
+      isOutdated
     }
   }
 }`
@@ -103,15 +107,15 @@ func (s *Service) Reply(_ resolver.Identity, opts ReplyOptions) (Reply, error) {
 					DatabaseID *int   `json:"databaseId"`
 					State      string `json:"state"`
 				} `json:"pullRequestReview"`
-				PullRequestReviewThread *struct {
-					ID         string `json:"id"`
-					IsResolved bool   `json:"isResolved"`
-					IsOutdated bool   `json:"isOutdated"`
-				} `json:"pullRequestReviewThread"`
 				ReplyTo *struct {
 					ID string `json:"id"`
 				} `json:"replyTo"`
 			} `json:"comment"`
+			Thread *struct {
+				ID         string `json:"id"`
+				IsResolved bool   `json:"isResolved"`
+				IsOutdated bool   `json:"isOutdated"`
+			} `json:"thread"`
 		} `json:"addPullRequestReviewThreadReply"`
 	}
 
@@ -129,15 +133,16 @@ func (s *Service) Reply(_ resolver.Identity, opts ReplyOptions) (Reply, error) {
 	if comment.Author == nil || strings.TrimSpace(comment.Author.Login) == "" {
 		return Reply{}, errors.New("mutation response missing author login")
 	}
-	if comment.PullRequestReviewThread == nil || strings.TrimSpace(comment.PullRequestReviewThread.ID) == "" {
+	thread := response.AddPullRequestReviewThreadReply.Thread
+	if thread == nil || strings.TrimSpace(thread.ID) == "" {
 		return Reply{}, errors.New("mutation response missing thread id")
 	}
 
 	reply := Reply{
 		ID:               comment.ID,
-		ThreadID:         comment.PullRequestReviewThread.ID,
-		ThreadIsResolved: comment.PullRequestReviewThread.IsResolved,
-		ThreadIsOutdated: comment.PullRequestReviewThread.IsOutdated,
+		ThreadID:         thread.ID,
+		ThreadIsResolved: thread.IsResolved,
+		ThreadIsOutdated: thread.IsOutdated,
 		Body:             comment.Body,
 		Path:             comment.Path,
 		HtmlURL:          comment.URL,

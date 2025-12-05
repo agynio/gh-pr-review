@@ -82,12 +82,12 @@ func TestServiceReply_SendsMutation(t *testing.T) {
 						"databaseId": 202,
 						"state":      "PENDING",
 					},
-					"pullRequestReviewThread": map[string]interface{}{
-						"id":         "PRRT_thread",
-						"isResolved": true,
-						"isOutdated": false,
-					},
 					"replyTo": map[string]interface{}{"id": "PRRC_parent"},
+				},
+				"thread": map[string]interface{}{
+					"id":         "PRRT_thread",
+					"isResolved": true,
+					"isOutdated": false,
 				},
 			},
 		}
@@ -148,12 +148,12 @@ func TestServiceReply_OmitsOptionalFields(t *testing.T) {
 					"updatedAt":         "2025-12-03T10:05:00Z",
 					"author":            map[string]interface{}{"login": "octocat"},
 					"pullRequestReview": nil,
-					"pullRequestReviewThread": map[string]interface{}{
-						"id":         "PRRT_thread",
-						"isResolved": false,
-						"isOutdated": true,
-					},
-					"replyTo": nil,
+					"replyTo":           nil,
+				},
+				"thread": map[string]interface{}{
+					"id":         "PRRT_thread",
+					"isResolved": false,
+					"isOutdated": true,
 				},
 			},
 		}
@@ -185,6 +185,7 @@ func TestServiceReply_ErrorsOnMissingComment(t *testing.T) {
 		payload := map[string]interface{}{
 			"addPullRequestReviewThreadReply": map[string]interface{}{
 				"comment": nil,
+				"thread":  nil,
 			},
 		}
 		return assign(result, payload)
@@ -194,4 +195,30 @@ func TestServiceReply_ErrorsOnMissingComment(t *testing.T) {
 	_, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "PRRT_thread", Body: "Ack"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mutation response missing comment")
+}
+
+func TestServiceReply_ErrorsOnMissingThread(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		payload := map[string]interface{}{
+			"addPullRequestReviewThreadReply": map[string]interface{}{
+				"comment": map[string]interface{}{
+					"id":        "PRRC_reply",
+					"body":      "Ack",
+					"path":      "",
+					"url":       "https://example.com/comment",
+					"createdAt": "2025-12-03T10:00:00Z",
+					"updatedAt": "2025-12-03T10:05:00Z",
+					"author":    map[string]interface{}{"login": "octocat"},
+				},
+				"thread": nil,
+			},
+		}
+		return assign(result, payload)
+	}
+
+	svc := NewService(api)
+	_, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "PRRT_thread", Body: "Ack"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mutation response missing thread id")
 }
