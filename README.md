@@ -168,7 +168,7 @@ gh extension upgrade Agyn-sandbox/gh-pr-review
 | `--states <list>` | Comma-separated review states (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED`). |
 | `--unresolved` | Keep only unresolved threads. |
 | `--not_outdated` | Exclude threads marked as outdated. |
-| `--tail <n>` | Retain only the last `n` replies per thread (0 = all). |
+| `--tail <n>` | Retain only the last `n` replies per thread (0 = all). The parent inline comment is always kept; only replies are trimmed. |
 
 ### Examples
 
