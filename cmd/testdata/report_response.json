@@ -32,6 +32,7 @@
             "comments": {
               "nodes": [
                 {
+                  "id": "C301",
                   "databaseId": 301,
                   "body": "Parent comment 1",
                   "createdAt": "2025-12-03T10:01:00Z",
@@ -44,6 +45,7 @@
                   "replyTo": null
                 },
                 {
+                  "id": "C302",
                   "databaseId": 302,
                   "body": "Reply alpha",
                   "createdAt": "2025-12-03T10:02:00Z",
@@ -53,9 +55,10 @@
                     "state": "APPROVED",
                     "databaseId": 101
                   },
-                  "replyTo": { "databaseId": 301 }
+                  "replyTo": { "id": "C301", "databaseId": 301 }
                 },
                 {
+                  "id": "C303",
                   "databaseId": 303,
                   "body": "Reply beta",
                   "createdAt": "2025-12-03T10:03:00Z",
@@ -65,7 +68,7 @@
                     "state": "APPROVED",
                     "databaseId": 101
                   },
-                  "replyTo": { "databaseId": 302 }
+                  "replyTo": { "id": "C302", "databaseId": 302 }
                 }
               ]
             }
@@ -79,6 +82,7 @@
             "comments": {
               "nodes": [
                 {
+                  "id": "C401",
                   "databaseId": 401,
                   "body": "Parent comment 2",
                   "createdAt": "2025-12-03T10:04:00Z",
@@ -91,6 +95,7 @@
                   "replyTo": null
                 },
                 {
+                  "id": "C402",
                   "databaseId": 402,
                   "body": "Reply gamma",
                   "createdAt": "2025-12-03T10:05:00Z",
@@ -100,7 +105,7 @@
                     "state": "COMMENTED",
                     "databaseId": 202
                   },
-                  "replyTo": { "databaseId": 401 }
+                  "replyTo": { "id": "C401", "databaseId": 401 }
                 }
               ]
             }

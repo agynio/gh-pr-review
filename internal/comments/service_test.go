@@ -3,10 +3,8 @@ package comments
 import (
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/ghcli"
 	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,193 +37,161 @@ func assign(result interface{}, payload interface{}) error {
 	return json.Unmarshal(data, result)
 }
 
-type pendingReviewNode struct {
-	ID                string `json:"id"`
-	DatabaseID        int64  `json:"databaseId"`
-	State             string `json:"state"`
-	AuthorAssociation string `json:"authorAssociation"`
-	URL               string `json:"url"`
-	UpdatedAt         string `json:"updatedAt"`
-	CreatedAt         string `json:"createdAt"`
-	Author            struct {
-		Login      string `json:"login"`
-		DatabaseID int64  `json:"databaseId"`
-	} `json:"author"`
-}
-
-func TestServiceReply_RejectsInvalidCommentID(t *testing.T) {
+func TestServiceReply_RejectsMissingThreadID(t *testing.T) {
 	api := &fakeAPI{}
 	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
 
-	_, err := svc.Reply(pr, ReplyOptions{CommentID: 0, Body: "hello"})
+	_, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "", Body: "hello"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid comment id")
+	assert.Contains(t, err.Error(), "thread id is required")
 }
 
 func TestServiceReply_RejectsBlankBody(t *testing.T) {
 	api := &fakeAPI{}
 	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
 
-	_, err := svc.Reply(pr, ReplyOptions{CommentID: 5, Body: "   "})
+	_, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "PRRT_thread", Body: "   "})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "reply body is required")
 }
 
-func TestServiceReply_AutoSubmitPending(t *testing.T) {
+func TestServiceReply_SendsMutation(t *testing.T) {
 	api := &fakeAPI{}
-	var submitted []int64
-	attempt := 0
 	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		if !strings.Contains(query, "PendingReviews") {
-			return errors.New("unexpected query: " + query)
-		}
-		require.Equal(t, "octo", variables["owner"])
-		require.Equal(t, "demo", variables["name"])
-		require.EqualValues(t, 7, variables["number"])
-		require.EqualValues(t, 100, variables["pageSize"])
-		_, hasCursor := variables["cursor"]
-		require.False(t, hasCursor)
-		_, hasAuthor := variables["author"]
-		require.False(t, hasAuthor)
+		require.Contains(t, query, "AddPullRequestReviewThreadReply")
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "PRRT_thread", input["pullRequestReviewThreadId"])
+		require.Equal(t, "Body text", input["body"])
+		require.Equal(t, "PRR_pending", input["pullRequestReviewId"])
 
-		payload := struct {
-			Data struct {
-				Viewer struct {
-					Login      string `json:"login"`
-					DatabaseID int64  `json:"databaseId"`
-				} `json:"viewer"`
-				Repository struct {
-					PullRequest struct {
-						Reviews struct {
-							Nodes    []pendingReviewNode `json:"nodes"`
-							PageInfo struct {
-								HasNextPage bool   `json:"hasNextPage"`
-								EndCursor   string `json:"endCursor"`
-							} `json:"pageInfo"`
-						} `json:"reviews"`
-					} `json:"pullRequest"`
-				} `json:"repository"`
-			} `json:"data"`
-		}{}
-		payload.Data.Viewer.Login = "casey"
-		payload.Data.Viewer.DatabaseID = 77
-		payload.Data.Repository.PullRequest.Reviews.Nodes = []pendingReviewNode{
-			{
-				ID:                "RV_pending_99",
-				DatabaseID:        99,
-				State:             "PENDING",
-				AuthorAssociation: "MEMBER",
-				URL:               "https://example.com/review/99",
-				UpdatedAt:         "2024-06-02T12:00:00Z",
-				CreatedAt:         "2024-06-02T11:45:00Z",
-				Author: struct {
-					Login      string `json:"login"`
-					DatabaseID int64  `json:"databaseId"`
-				}{Login: "octocat", DatabaseID: 202},
+		payload := map[string]interface{}{
+			"addPullRequestReviewThreadReply": map[string]interface{}{
+				"comment": map[string]interface{}{
+					"id":         "PRRC_reply",
+					"databaseId": 101,
+					"body":       "Body text",
+					"diffHunk":   "@@ -10,5 +10,7 @@",
+					"path":       "internal/service.go",
+					"url":        "https://example.com/comment",
+					"createdAt":  "2025-12-03T10:00:00Z",
+					"updatedAt":  "2025-12-03T10:05:00Z",
+					"author":     map[string]interface{}{"login": "octocat"},
+					"pullRequestReview": map[string]interface{}{
+						"id":         "PRR_pending",
+						"databaseId": 202,
+						"state":      "PENDING",
+					},
+					"pullRequestReviewThread": map[string]interface{}{
+						"id":         "PRRT_thread",
+						"isResolved": true,
+						"isOutdated": false,
+					},
+					"replyTo": map[string]interface{}{"id": "PRRC_parent"},
+				},
 			},
 		}
-		payload.Data.Repository.PullRequest.Reviews.PageInfo.HasNextPage = false
-		payload.Data.Repository.PullRequest.Reviews.PageInfo.EndCursor = ""
 		return assign(result, payload)
-	}
-	api.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		switch {
-		case path == "user":
-			return assign(result, map[string]interface{}{"login": "octocat"})
-		case path == "repos/octo/demo/pulls/7/reviews":
-			payload := []map[string]interface{}{
-				{"id": 99, "state": "PENDING", "user": map[string]interface{}{"login": "octocat"}},
-			}
-			return assign(result, payload)
-		case path == "repos/octo/demo/pulls/7/reviews/99/events" && method == "POST":
-			submitted = append(submitted, 99)
-			return nil
-		case path == "repos/octo/demo/pulls/7/comments/5/replies" && method == "POST":
-			attempt++
-			if attempt == 1 {
-				return &ghcli.APIError{
-					StatusCode: 422,
-					Message:    "gh: Validation Failed (HTTP 422)",
-					Body:       `{"message":"Validation Failed","errors":[{"message":"user_id can only have one pending review per pull request"}]}`,
-				}
-			}
-			return assign(result, map[string]interface{}{"id": 123, "body": "ok"})
-		default:
-			return errors.New("unexpected request: " + path)
-		}
 	}
 
 	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	reply, err := svc.Reply(pr, ReplyOptions{CommentID: 5, Body: "ack"})
+	reply, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "PRRT_thread", ReviewID: "PRR_pending", Body: "Body text"})
 	require.NoError(t, err)
-	assert.Contains(t, string(reply), "\"id\":123")
-	assert.Equal(t, []int64{99}, submitted)
+	assert.Equal(t, "PRRC_reply", reply.ID)
+	assert.Equal(t, "PRRT_thread", reply.ThreadID)
+	assert.True(t, reply.ThreadIsResolved)
+	assert.False(t, reply.ThreadIsOutdated)
+	assert.Equal(t, "Body text", reply.Body)
+	assert.Equal(t, "internal/service.go", reply.Path)
+	assert.Equal(t, "https://example.com/comment", reply.HtmlURL)
+	assert.Equal(t, "octocat", reply.AuthorLogin)
+	assert.Equal(t, "2025-12-03T10:00:00Z", reply.CreatedAt)
+	assert.Equal(t, "2025-12-03T10:05:00Z", reply.UpdatedAt)
+	if assert.NotNil(t, reply.DatabaseID) {
+		assert.Equal(t, 101, *reply.DatabaseID)
+	}
+	if assert.NotNil(t, reply.DiffHunk) {
+		assert.Equal(t, "@@ -10,5 +10,7 @@", *reply.DiffHunk)
+	}
+	if assert.NotNil(t, reply.ReviewID) {
+		assert.Equal(t, "PRR_pending", *reply.ReviewID)
+	}
+	if assert.NotNil(t, reply.ReviewDatabaseID) {
+		assert.Equal(t, 202, *reply.ReviewDatabaseID)
+	}
+	if assert.NotNil(t, reply.ReviewState) {
+		assert.Equal(t, "PENDING", *reply.ReviewState)
+	}
+	if assert.NotNil(t, reply.ReplyToCommentID) {
+		assert.Equal(t, "PRRC_parent", *reply.ReplyToCommentID)
+	}
 }
 
-func TestServiceReply_PendingMissing(t *testing.T) {
+func TestServiceReply_OmitsOptionalFields(t *testing.T) {
 	api := &fakeAPI{}
 	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
-		if !strings.Contains(query, "PendingReviews") {
-			return errors.New("unexpected query")
-		}
-		require.Equal(t, "octo", variables["owner"])
-		require.Equal(t, "demo", variables["name"])
-		require.EqualValues(t, 7, variables["number"])
-		require.EqualValues(t, 100, variables["pageSize"])
-		_, hasCursor := variables["cursor"]
-		require.False(t, hasCursor)
-		_, hasAuthor := variables["author"]
-		require.False(t, hasAuthor)
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		_, hasReview := input["pullRequestReviewId"]
+		require.False(t, hasReview)
 
-		payload := struct {
-			Data struct {
-				Viewer struct {
-					Login      string `json:"login"`
-					DatabaseID int64  `json:"databaseId"`
-				} `json:"viewer"`
-				Repository struct {
-					PullRequest struct {
-						Reviews struct {
-							Nodes    []pendingReviewNode `json:"nodes"`
-							PageInfo struct {
-								HasNextPage bool   `json:"hasNextPage"`
-								EndCursor   string `json:"endCursor"`
-							} `json:"pageInfo"`
-						} `json:"reviews"`
-					} `json:"pullRequest"`
-				} `json:"repository"`
-			} `json:"data"`
-		}{}
-		payload.Data.Viewer.Login = "casey"
-		payload.Data.Viewer.DatabaseID = 77
-		payload.Data.Repository.PullRequest.Reviews.Nodes = nil
-		payload.Data.Repository.PullRequest.Reviews.PageInfo.HasNextPage = false
-		payload.Data.Repository.PullRequest.Reviews.PageInfo.EndCursor = ""
-		return assign(result, payload)
-	}
-	api.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		switch path {
-		case "repos/octo/demo/pulls/7/comments/5/replies":
-			return &ghcli.APIError{
-				StatusCode: 422,
-				Message:    "gh: Validation Failed (HTTP 422)",
-				Body:       `{"message":"Validation Failed","errors":[{"message":"user_id can only have one pending review per pull request"}]}`,
-			}
-		case "user":
-			return assign(result, map[string]interface{}{"login": "octocat"})
-		case "repos/octo/demo/pulls/7/reviews":
-			return assign(result, []map[string]interface{}{})
-		default:
-			return errors.New("unexpected path")
+		payload := map[string]interface{}{
+			"addPullRequestReviewThreadReply": map[string]interface{}{
+				"comment": map[string]interface{}{
+					"id":                "PRRC_reply",
+					"databaseId":        nil,
+					"body":              "Ack",
+					"diffHunk":          "",
+					"path":              "",
+					"url":               "https://example.com/comment",
+					"createdAt":         "2025-12-03T10:00:00Z",
+					"updatedAt":         "2025-12-03T10:05:00Z",
+					"author":            map[string]interface{}{"login": "octocat"},
+					"pullRequestReview": nil,
+					"pullRequestReviewThread": map[string]interface{}{
+						"id":         "PRRT_thread",
+						"isResolved": false,
+						"isOutdated": true,
+					},
+					"replyTo": nil,
+				},
+			},
 		}
+		return assign(result, payload)
 	}
 
 	svc := NewService(api)
-	pr := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7, Host: "github.com"}
-	_, err := svc.Reply(pr, ReplyOptions{CommentID: 5, Body: "ack"})
+	reply, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "PRRT_thread", Body: "Ack"})
+	require.NoError(t, err)
+	assert.Equal(t, "PRRC_reply", reply.ID)
+	assert.Equal(t, "PRRT_thread", reply.ThreadID)
+	assert.False(t, reply.ThreadIsResolved)
+	assert.True(t, reply.ThreadIsOutdated)
+	assert.Equal(t, "Ack", reply.Body)
+	assert.Equal(t, "", reply.Path)
+	assert.Equal(t, "https://example.com/comment", reply.HtmlURL)
+	assert.Equal(t, "octocat", reply.AuthorLogin)
+	assert.Nil(t, reply.DatabaseID)
+	assert.Nil(t, reply.DiffHunk)
+	assert.Nil(t, reply.ReviewID)
+	assert.Nil(t, reply.ReviewDatabaseID)
+	assert.Nil(t, reply.ReviewState)
+	assert.Nil(t, reply.ReplyToCommentID)
+}
+
+func TestServiceReply_ErrorsOnMissingComment(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		payload := map[string]interface{}{
+			"addPullRequestReviewThreadReply": map[string]interface{}{
+				"comment": nil,
+			},
+		}
+		return assign(result, payload)
+	}
+
+	svc := NewService(api)
+	_, err := svc.Reply(resolver.Identity{}, ReplyOptions{ThreadID: "PRRT_thread", Body: "Ack"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no pending reviews for octocat")
+	assert.Contains(t, err.Error(), "mutation response missing comment")
 }

@@ -1,4 +1,4 @@
-# Usage reference (v1.3.4)
+# Usage reference (v1.4.0)
 
 All commands accept pull request selectors in any GitHub CLI format:
 
@@ -61,12 +61,15 @@ gh pr-review review --add-comment \
 ## review report (GraphQL only)
 
 - **Purpose:** Emit a consolidated snapshot of reviews, inline comments, and
-  replies. Use it to discover numeric comment identifiers before replying.
+  replies. Use it to capture thread identifiers before replying or resolving
+  discussions.
 - **Inputs:**
   - Optional pull request selector argument (`owner/repo#123` or URL).
   - `--repo` / `--pr` flags when not using the selector shorthand.
   - Filters: `--reviewer`, `--states`, `--unresolved`, `--not_outdated`,
     `--tail`.
+  - `--include-comment-node-id` to surface GraphQL comment IDs on parent
+    comments and replies.
 - **Backend:** GitHub GraphQL `pullRequest.reviews` query.
 - **Output shape:**
 
@@ -81,9 +84,14 @@ gh pr-review review report --reviewer octocat --states CHANGES_REQUESTED owner/r
       "author_login": "octocat",
       "comments": [
         {
-          "id": 3531807471,
+          "thread_id": "PRRT_kwDOAAABbFg12345",
           "path": "internal/service.go",
+          "line": 42,
+          "author_login": "octocat",
           "body": "nit: prefer helper",
+          "created_at": "2025-12-03T10:00:00Z",
+          "is_resolved": false,
+          "is_outdated": false,
           "thread": []
         }
       ]
@@ -92,8 +100,10 @@ gh pr-review review report --reviewer octocat --states CHANGES_REQUESTED owner/r
 }
 ```
 
-The numeric comment `id` values surfaced in the report feed directly into
-`comments reply`.
+The `thread_id` values surfaced in the report feed directly into
+`comments reply`. Enable `--include-comment-node-id` to decorate parent
+comments and replies with GraphQL `comment_node_id` fields; those keys remain
+omitted otherwise.
 
 ## review --submit (GraphQL only)
 
@@ -131,57 +141,60 @@ gh pr-review review --submit \
 ```
 
 > **Tip:** `review report` is the preferred way to discover review metadata
-> (pending review IDs, comment IDs, thread state) before mutating threads or
+> (pending review IDs, thread IDs, optional comment node IDs, thread state)
+> before mutating threads or
 > replying.
 
-## comments reply (REST, optional concise mode)
+## comments reply (GraphQL, optional concise mode)
 
-- **Purpose:** Reply to a review comment.
+- **Purpose:** Reply to a review thread.
 - **Inputs:**
-  - `--comment-id` **(required):** Numeric comment identifier.
+  - `--thread-id` **(required):** GraphQL review thread identifier (`PRRT_…`).
+  - `--review-id`: GraphQL review identifier when replying inside your pending
+    review (`PRR_…`).
   - `--body` **(required).**
-  - `--concise`: Emit the minimal `{ "id": <reply-id> }` response.
-- **Backend:** GitHub REST `POST /pulls/comments/{comment_id}/replies`.
-- **Auto-submit behavior:** When GitHub blocks the reply because you own a
-  pending review, the extension uses GraphQL only to locate pending review IDs
-  and submits them via REST before retrying.
+  - `--concise`: Emit the minimal `{ "id": "<comment-id>" }` response.
+- **Backend:** GitHub GraphQL `addPullRequestReviewThreadReply` mutation.
 - **Output schema:**
-  - Default: GitHub REST pull request review comment object (see
-    [`ReplyComment`](SCHEMAS.md#replycomment)).
+  - Default: [`ReplyComment`](SCHEMAS.md#replycomment).
   - `--concise`: [`ReplyConcise`](SCHEMAS.md#replyconcise).
 
 ```sh
-# Full REST payload
+# Full GraphQL payload
 gh pr-review comments reply \
-  --comment-id 987654321 \
+  --thread-id PRRT_kwDOAAABbFg12345 \
+  --review-id PRR_kwDOAAABbcdEFG12 \
   --body "Thanks for catching this" \
   owner/repo#42
 
-# Sample output (subset of fields; GitHub returns additional metadata)
 {
-  "id": 1122334455,
-  "node_id": "MDEyOkNvbW1lbnQxMTIyMzM0NDU1",
-  "pull_request_review_id": 3531807471,
-  "in_reply_to_id": 987654321,
+  "id": "PRRC_kwDOAAABbhi7890",
+  "database_id": 1122334455,
+  "review_id": "PRR_kwDOAAABbcdEFG12",
+  "review_database_id": 3531807471,
+  "review_state": "PENDING",
+  "thread_id": "PRRT_kwDOAAABbFg12345",
+  "thread_is_resolved": false,
+  "thread_is_outdated": false,
+  "reply_to_comment_id": "PRRC_kwDOAAABbparent",
   "body": "Thanks for catching this",
-  "user": { "login": "octocat", "id": 6752317 },
+  "diff_hunk": "@@ -10,5 +10,7 @@",
   "path": "internal/service.go",
-  "line": 42,
-  "side": "RIGHT",
   "html_url": "https://github.com/owner/repo/pull/42#discussion_r1122334455",
-  "created_at": "2024-12-19T18:35:02Z",
-  "updated_at": "2024-12-19T18:35:02Z"
+  "author_login": "octocat",
+  "created_at": "2025-12-19T18:35:02Z",
+  "updated_at": "2025-12-19T18:35:02Z"
 }
 
 # Concise payload
 gh pr-review comments reply \
-  --comment-id 987654321 \
+  --thread-id PRRT_kwDOAAABbFg12345 \
   --body "Ack" \
   --concise \
   owner/repo#42
 
 {
-  "id": 123456789
+  "id": "PRRC_kwDOAAABbhi7890"
 }
 ```
 

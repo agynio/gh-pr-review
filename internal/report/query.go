@@ -30,6 +30,7 @@ const reportQuery = `query Report(
           isOutdated
           comments(first: $firstComments) {
             nodes {
+              id
               databaseId
               body
               createdAt
@@ -40,6 +41,7 @@ const reportQuery = `query Report(
                 databaseId
               }
               replyTo {
+                id
                 databaseId
               }
             }

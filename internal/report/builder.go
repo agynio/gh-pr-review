@@ -96,26 +96,42 @@ func BuildReport(reviews []Review, threads []Thread, filters FilterOptions) Repo
 		reportReplies := make([]ThreadReply, len(replies))
 		for i, reply := range replies {
 			createdAt := reply.CreatedAt.UTC().Format(time.RFC3339)
+			var commentNodeID *string
+			if filters.IncludeCommentNodeID && reply.NodeID != "" {
+				replyID := reply.NodeID
+				commentNodeID = &replyID
+			}
+			var inReplyToNodeID *string
+			if filters.IncludeCommentNodeID && reply.ReplyToCommentNode != nil && *reply.ReplyToCommentNode != "" {
+				replyTo := *reply.ReplyToCommentNode
+				inReplyToNodeID = &replyTo
+			}
 			reportReplies[i] = ThreadReply{
-				ID:          reply.DatabaseID,
-				InReplyToID: reply.ReplyToDatabaseID,
-				AuthorLogin: reply.AuthorLogin,
-				Body:        reply.Body,
-				CreatedAt:   createdAt,
+				CommentNodeID:          commentNodeID,
+				InReplyToCommentNodeID: inReplyToNodeID,
+				AuthorLogin:            reply.AuthorLogin,
+				Body:                   reply.Body,
+				CreatedAt:              createdAt,
 			}
 		}
 
 		createdAt := parent.CreatedAt.UTC().Format(time.RFC3339)
+		var commentNodeID *string
+		if filters.IncludeCommentNodeID && parent.NodeID != "" {
+			id := parent.NodeID
+			commentNodeID = &id
+		}
 		reportComment := ReportComment{
-			ID:          parent.DatabaseID,
-			Path:        thread.Path,
-			Line:        thread.Line,
-			AuthorLogin: parent.AuthorLogin,
-			Body:        parent.Body,
-			CreatedAt:   createdAt,
-			IsResolved:  thread.IsResolved,
-			IsOutdated:  thread.IsOutdated,
-			Thread:      reportReplies,
+			ThreadID:      thread.ID,
+			CommentNodeID: commentNodeID,
+			Path:          thread.Path,
+			Line:          thread.Line,
+			AuthorLogin:   parent.AuthorLogin,
+			Body:          parent.Body,
+			CreatedAt:     createdAt,
+			IsResolved:    thread.IsResolved,
+			IsOutdated:    thread.IsOutdated,
+			Thread:        reportReplies,
 		}
 
 		if len(reportReplies) == 0 {

@@ -34,19 +34,21 @@ func newReviewReportCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Unresolved, "unresolved", false, "Only include unresolved threads")
 	cmd.Flags().BoolVar(&opts.NotOutdated, "not_outdated", false, "Exclude outdated threads")
 	cmd.Flags().IntVar(&opts.TailReplies, "tail", 0, "Limit to the last N replies per thread (0 = all)")
+	cmd.Flags().BoolVar(&opts.IncludeCommentNodeID, "include-comment-node-id", false, "Include comment_node_id fields for parent comments and replies")
 
 	return cmd
 }
 
 type reviewReportOptions struct {
-	Repo        string
-	Pull        int
-	Selector    string
-	Reviewer    string
-	States      []string
-	Unresolved  bool
-	NotOutdated bool
-	TailReplies int
+	Repo                 string
+	Pull                 int
+	Selector             string
+	Reviewer             string
+	States               []string
+	Unresolved           bool
+	NotOutdated          bool
+	TailReplies          int
+	IncludeCommentNodeID bool
 }
 
 func runReviewReport(cmd *cobra.Command, opts *reviewReportOptions) error {
@@ -71,12 +73,13 @@ func runReviewReport(cmd *cobra.Command, opts *reviewReportOptions) error {
 
 	service := report.NewService(apiClientFactory(identity.Host))
 	output, err := service.Fetch(identity, report.Options{
-		Reviewer:           strings.TrimSpace(opts.Reviewer),
-		States:             states,
-		StatesProvided:     statesProvided,
-		RequireUnresolved:  opts.Unresolved,
-		RequireNotOutdated: opts.NotOutdated,
-		TailReplies:        opts.TailReplies,
+		Reviewer:             strings.TrimSpace(opts.Reviewer),
+		States:               states,
+		StatesProvided:       statesProvided,
+		RequireUnresolved:    opts.Unresolved,
+		RequireNotOutdated:   opts.NotOutdated,
+		TailReplies:          opts.TailReplies,
+		IncludeCommentNodeID: opts.IncludeCommentNodeID,
 	})
 	if err != nil {
 		return err

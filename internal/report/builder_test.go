@@ -38,28 +38,34 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 		IsOutdated: false,
 		Comments: []report.ThreadComment{
 			{
+				NodeID:            "C301",
 				DatabaseID:        301,
 				Body:              "Parent comment",
 				CreatedAt:         time.Date(2025, 12, 3, 10, 1, 0, 0, time.UTC),
 				AuthorLogin:       "alice",
 				ReviewDatabaseID:  intPtr(101),
 				ReplyToDatabaseID: nil,
+				ReplyToCommentNode: nil,
 			},
 			{
-				DatabaseID:        302,
-				Body:              "First reply",
-				CreatedAt:         time.Date(2025, 12, 3, 10, 2, 0, 0, time.UTC),
-				AuthorLogin:       "bob",
-				ReviewDatabaseID:  intPtr(101),
-				ReplyToDatabaseID: intPtr(301),
+				NodeID:             "C302",
+				DatabaseID:         302,
+				Body:               "First reply",
+				CreatedAt:          time.Date(2025, 12, 3, 10, 2, 0, 0, time.UTC),
+				AuthorLogin:        "bob",
+				ReviewDatabaseID:   intPtr(101),
+				ReplyToDatabaseID:  intPtr(301),
+				ReplyToCommentNode: strPtr("C301"),
 			},
 			{
-				DatabaseID:        303,
-				Body:              "Second reply",
-				CreatedAt:         time.Date(2025, 12, 3, 10, 3, 0, 0, time.UTC),
-				AuthorLogin:       "alice",
-				ReviewDatabaseID:  intPtr(101),
-				ReplyToDatabaseID: intPtr(302),
+				NodeID:             "C303",
+				DatabaseID:         303,
+				Body:               "Second reply",
+				CreatedAt:          time.Date(2025, 12, 3, 10, 3, 0, 0, time.UTC),
+				AuthorLogin:        "alice",
+				ReviewDatabaseID:   intPtr(101),
+				ReplyToDatabaseID:  intPtr(302),
+				ReplyToCommentNode: strPtr("C302"),
 			},
 		},
 	}
@@ -72,12 +78,14 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 		IsOutdated: false,
 		Comments: []report.ThreadComment{
 			{
+				NodeID:            "C401",
 				DatabaseID:        401,
 				Body:              "Solo parent",
 				CreatedAt:         time.Date(2025, 12, 3, 10, 4, 0, 0, time.UTC),
 				AuthorLogin:       "alice",
 				ReviewDatabaseID:  intPtr(101),
 				ReplyToDatabaseID: nil,
+				ReplyToCommentNode: nil,
 			},
 		},
 	}
@@ -98,9 +106,12 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 	if len(first.Comments) != 2 {
 		t.Fatalf("expected 2 comments for first review, got %d", len(first.Comments))
 	}
-	comment := mustFindComment(first.Comments, 301)
-	if comment.ID != 301 {
-		t.Fatalf("expected parent ID 301, got %d", comment.ID)
+	comment := mustFindComment(first.Comments, "T1")
+	if comment.ThreadID != "T1" {
+		t.Fatalf("expected thread T1, got %s", comment.ThreadID)
+	}
+	if comment.CommentNodeID != nil {
+		t.Fatalf("expected comment_node_id to be omitted by default, got %v", *comment.CommentNodeID)
 	}
 	if comment.Line == nil || *comment.Line != 42 {
 		t.Fatalf("expected line 42, got %v", comment.Line)
@@ -108,12 +119,15 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 	if len(comment.Thread) != 2 {
 		t.Fatalf("expected 2 replies, got %d", len(comment.Thread))
 	}
-	if comment.Thread[0].ID != 302 || comment.Thread[1].ID != 303 {
-		t.Fatalf("unexpected reply IDs: %#v", comment.Thread)
+	if comment.Thread[0].Body != "First reply" || comment.Thread[1].Body != "Second reply" {
+		t.Fatalf("unexpected reply ordering: %#v", comment.Thread)
 	}
-	noReplyComment := mustFindComment(first.Comments, 401)
-	if noReplyComment.ID != 401 {
-		t.Fatalf("expected parent ID 401, got %d", noReplyComment.ID)
+	if comment.Thread[0].CommentNodeID != nil || comment.Thread[1].CommentNodeID != nil {
+		t.Fatal("expected reply comment_node_id omitted by default")
+	}
+	noReplyComment := mustFindComment(first.Comments, "T2")
+	if noReplyComment.ThreadID != "T2" {
+		t.Fatalf("expected thread T2, got %s", noReplyComment.ThreadID)
 	}
 	if len(noReplyComment.Thread) != 0 {
 		t.Fatalf("expected no replies for comment 401, got %d", len(noReplyComment.Thread))
@@ -128,6 +142,24 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 	}
 	if second.Comments != nil {
 		t.Fatalf("expected nil comments for second review, got %#v", second.Comments)
+	}
+
+	withIDs := report.BuildReport(reviews, []report.Thread{threadWithReplies, threadNoReplies}, report.FilterOptions{IncludeCommentNodeID: true})
+	if len(withIDs.Reviews) == 0 {
+		t.Fatal("expected reviews to be present when including comment node IDs")
+	}
+	commentWithIDs := mustFindComment(withIDs.Reviews[0].Comments, "T1")
+	if commentWithIDs.CommentNodeID == nil || *commentWithIDs.CommentNodeID != "C301" {
+		t.Fatalf("expected comment_node_id C301, got %v", commentWithIDs.CommentNodeID)
+	}
+	if len(commentWithIDs.Thread) != 2 {
+		t.Fatalf("expected replies to remain when including node IDs, got %d", len(commentWithIDs.Thread))
+	}
+	if commentWithIDs.Thread[0].CommentNodeID == nil || *commentWithIDs.Thread[0].CommentNodeID != "C302" {
+		t.Fatalf("expected reply comment_node_id C302, got %v", commentWithIDs.Thread[0].CommentNodeID)
+	}
+	if commentWithIDs.Thread[0].InReplyToCommentNodeID == nil || *commentWithIDs.Thread[0].InReplyToCommentNodeID != "C301" {
+		t.Fatalf("expected reply to reference parent C301, got %v", commentWithIDs.Thread[0].InReplyToCommentNodeID)
 	}
 
 	jsonBytes, err := json.Marshal(result)
@@ -155,8 +187,8 @@ func TestBuildReportFilterOptions(t *testing.T) {
 			IsResolved: false,
 			IsOutdated: true,
 			Comments: []report.ThreadComment{
-				{DatabaseID: 10, Body: "Parent", CreatedAt: time.Date(2025, 12, 3, 0, 0, 0, 0, time.UTC), AuthorLogin: "alice", ReviewDatabaseID: intPtr(1)},
-				{DatabaseID: 11, Body: "Reply", CreatedAt: time.Date(2025, 12, 3, 0, 1, 0, 0, time.UTC), AuthorLogin: "carol", ReviewDatabaseID: intPtr(1), ReplyToDatabaseID: intPtr(10)},
+				{NodeID: "C10", DatabaseID: 10, Body: "Parent", CreatedAt: time.Date(2025, 12, 3, 0, 0, 0, 0, time.UTC), AuthorLogin: "alice", ReviewDatabaseID: intPtr(1)},
+				{NodeID: "C11", DatabaseID: 11, Body: "Reply", CreatedAt: time.Date(2025, 12, 3, 0, 1, 0, 0, time.UTC), AuthorLogin: "carol", ReviewDatabaseID: intPtr(1), ReplyToDatabaseID: intPtr(10), ReplyToCommentNode: strPtr("C10")},
 			},
 		},
 		{
@@ -165,9 +197,9 @@ func TestBuildReportFilterOptions(t *testing.T) {
 			IsResolved: false,
 			IsOutdated: false,
 			Comments: []report.ThreadComment{
-				{DatabaseID: 20, Body: "Parent", CreatedAt: time.Date(2025, 12, 3, 0, 2, 0, 0, time.UTC), AuthorLogin: "bob", ReviewDatabaseID: intPtr(2)},
-				{DatabaseID: 21, Body: "Reply1", CreatedAt: time.Date(2025, 12, 3, 0, 3, 0, 0, time.UTC), AuthorLogin: "dave", ReviewDatabaseID: intPtr(2), ReplyToDatabaseID: intPtr(20)},
-				{DatabaseID: 22, Body: "Reply2", CreatedAt: time.Date(2025, 12, 3, 0, 4, 0, 0, time.UTC), AuthorLogin: "eve", ReviewDatabaseID: intPtr(2), ReplyToDatabaseID: intPtr(21)},
+				{NodeID: "C20", DatabaseID: 20, Body: "Parent", CreatedAt: time.Date(2025, 12, 3, 0, 2, 0, 0, time.UTC), AuthorLogin: "bob", ReviewDatabaseID: intPtr(2)},
+				{NodeID: "C21", DatabaseID: 21, Body: "Reply1", CreatedAt: time.Date(2025, 12, 3, 0, 3, 0, 0, time.UTC), AuthorLogin: "dave", ReviewDatabaseID: intPtr(2), ReplyToDatabaseID: intPtr(20), ReplyToCommentNode: strPtr("C20")},
+				{NodeID: "C22", DatabaseID: 22, Body: "Reply2", CreatedAt: time.Date(2025, 12, 3, 0, 4, 0, 0, time.UTC), AuthorLogin: "eve", ReviewDatabaseID: intPtr(2), ReplyToDatabaseID: intPtr(21), ReplyToCommentNode: strPtr("C21")},
 			},
 		},
 	}
@@ -193,14 +225,14 @@ func TestBuildReportFilterOptions(t *testing.T) {
 		t.Fatalf("expected 1 comment, got %d", len(review.Comments))
 	}
 	comment := review.Comments[0]
-	if comment.ID != 20 {
-		t.Fatalf("expected parent ID 20, got %d", comment.ID)
+	if comment.ThreadID != "T2" {
+		t.Fatalf("expected thread ID T2, got %s", comment.ThreadID)
 	}
 	if len(comment.Thread) != 1 {
 		t.Fatalf("expected 1 reply after tail filter, got %d", len(comment.Thread))
 	}
-	if comment.Thread[0].ID != 22 {
-		t.Fatalf("expected last reply ID 22, got %d", comment.Thread[0].ID)
+	if comment.Thread[0].Body != "Reply2" {
+		t.Fatalf("expected last reply body Reply2, got %s", comment.Thread[0].Body)
 	}
 	if comment.IsOutdated {
 		t.Fatal("expected is_outdated to be false after filtering")
@@ -214,9 +246,9 @@ func intPtr(v int) *int {
 	return &v
 }
 
-func mustFindComment(comments []report.ReportComment, id int) report.ReportComment {
+func mustFindComment(comments []report.ReportComment, threadID string) report.ReportComment {
 	for _, comment := range comments {
-		if comment.ID == id {
+		if comment.ThreadID == threadID {
 			return comment
 		}
 	}

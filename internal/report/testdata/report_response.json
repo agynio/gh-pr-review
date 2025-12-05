@@ -32,79 +32,84 @@
             "comments": {
               "nodes": [
                 {
-                  "databaseId": 301,
-                  "body": "Parent comment 1",
-                  "createdAt": "2025-12-03T10:01:00Z",
-                  "author": { "login": "alice" },
-                  "pullRequestReview": {
-                    "id": "R1",
-                    "state": "APPROVED",
-                    "databaseId": 101
-                  },
-                  "replyTo": null
-                },
-                {
-                  "databaseId": 302,
-                  "body": "Reply alpha",
-                  "createdAt": "2025-12-03T10:02:00Z",
-                  "author": { "login": "bob" },
-                  "pullRequestReview": {
-                    "id": "R1",
-                    "state": "APPROVED",
-                    "databaseId": 101
-                  },
-                  "replyTo": { "databaseId": 301 }
-                },
-                {
-                  "databaseId": 303,
-                  "body": "Reply beta",
-                  "createdAt": "2025-12-03T10:03:00Z",
-                  "author": { "login": "alice" },
-                  "pullRequestReview": {
-                    "id": "R1",
-                    "state": "APPROVED",
-                    "databaseId": 101
-                  },
-                  "replyTo": { "databaseId": 302 }
-                }
-              ]
+              "id": "C301",
+              "databaseId": 301,
+              "body": "Parent comment 1",
+              "createdAt": "2025-12-03T10:01:00Z",
+              "author": { "login": "alice" },
+              "pullRequestReview": {
+                "id": "R1",
+                "state": "APPROVED",
+                "databaseId": 101
+              },
+              "replyTo": null
+            },
+            {
+              "id": "C302",
+              "databaseId": 302,
+              "body": "Reply alpha",
+              "createdAt": "2025-12-03T10:02:00Z",
+              "author": { "login": "bob" },
+              "pullRequestReview": {
+                "id": "R1",
+                "state": "APPROVED",
+                "databaseId": 101
+              },
+              "replyTo": { "id": "C301", "databaseId": 301 }
+            },
+            {
+              "id": "C303",
+              "databaseId": 303,
+              "body": "Reply beta",
+              "createdAt": "2025-12-03T10:03:00Z",
+              "author": { "login": "alice" },
+              "pullRequestReview": {
+                "id": "R1",
+                "state": "APPROVED",
+                "databaseId": 101
+              },
+              "replyTo": { "id": "C302", "databaseId": 302 }
             }
-          },
-          {
-            "id": "T2",
-            "path": "main.go",
-            "line": null,
-            "isResolved": true,
-            "isOutdated": true,
-            "comments": {
-              "nodes": [
-                {
-                  "databaseId": 401,
-                  "body": "Parent comment 2",
-                  "createdAt": "2025-12-03T10:04:00Z",
-                  "author": { "login": "bob" },
-                  "pullRequestReview": {
-                    "id": "R2",
-                    "state": "COMMENTED",
-                    "databaseId": 202
-                  },
-                  "replyTo": null
-                },
-                {
-                  "databaseId": 402,
-                  "body": "Reply gamma",
-                  "createdAt": "2025-12-03T10:05:00Z",
-                  "author": { "login": "alice" },
-                  "pullRequestReview": {
-                    "id": "R2",
-                    "state": "COMMENTED",
-                    "databaseId": 202
-                  },
-                  "replyTo": { "databaseId": 401 }
-                }
-              ]
+          ]
+        }
+      },
+      {
+        "id": "T2",
+        "path": "main.go",
+        "line": null,
+        "isResolved": true,
+        "isOutdated": true,
+        "comments": {
+          "nodes": [
+            {
+              "id": "C401",
+              "databaseId": 401,
+              "body": "Parent comment 2",
+              "createdAt": "2025-12-03T10:04:00Z",
+              "author": { "login": "bob" },
+              "pullRequestReview": {
+                "id": "R2",
+                "state": "COMMENTED",
+                "databaseId": 202
+              },
+              "replyTo": null
+            },
+            {
+              "id": "C402",
+              "databaseId": 402,
+              "body": "Reply gamma",
+              "createdAt": "2025-12-03T10:05:00Z",
+              "author": { "login": "alice" },
+              "pullRequestReview": {
+                "id": "R2",
+                "state": "COMMENTED",
+                "databaseId": 202
+              },
+              "replyTo": { "id": "C401", "databaseId": 401 }
             }
-          }
+          ]
+        }
+      }
         ]
       }
     }

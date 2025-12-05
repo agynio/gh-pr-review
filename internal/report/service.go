@@ -23,12 +23,13 @@ type Service struct {
 
 // Options controls data retrieval and shaping for the report.
 type Options struct {
-	Reviewer           string
-	States             []State
-	StatesProvided     bool
-	RequireUnresolved  bool
-	RequireNotOutdated bool
-	TailReplies        int
+	Reviewer             string
+	States               []State
+	StatesProvided       bool
+	RequireUnresolved    bool
+	RequireNotOutdated   bool
+	TailReplies          int
+	IncludeCommentNodeID bool
 }
 
 // NewService constructs a report service using the provided GraphQL API client.
@@ -78,6 +79,7 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 						IsOutdated bool   `json:"isOutdated"`
 						Comments   struct {
 							Nodes []struct {
+								ID         string `json:"id"`
 								DatabaseID int    `json:"databaseId"`
 								Body       string `json:"body"`
 								CreatedAt  string `json:"createdAt"`
@@ -90,7 +92,8 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 									ID         string `json:"id"`
 								} `json:"pullRequestReview"`
 								ReplyTo *struct {
-									DatabaseID int `json:"databaseId"`
+									ID         string `json:"id"`
+									DatabaseID int    `json:"databaseId"`
 								} `json:"replyTo"`
 							} `json:"nodes"`
 						} `json:"comments"`
@@ -151,6 +154,9 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 		}
 
 		for _, comment := range node.Comments.Nodes {
+			if comment.ID == "" {
+				return Report{}, errors.New("comment missing id")
+			}
 			if comment.Author == nil || comment.Author.Login == "" {
 				return Report{}, errors.New("comment missing author login")
 			}
@@ -163,18 +169,25 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 				reviewDatabaseID = comment.PullRequestReview.DatabaseID
 			}
 			var replyTo *int
+			var replyToNode *string
 			if comment.ReplyTo != nil {
 				replyID := comment.ReplyTo.DatabaseID
 				replyTo = &replyID
+				if comment.ReplyTo.ID != "" {
+					replyNode := comment.ReplyTo.ID
+					replyToNode = &replyNode
+				}
 			}
 
 			thread.Comments = append(thread.Comments, ThreadComment{
-				DatabaseID:        comment.DatabaseID,
-				Body:              comment.Body,
-				CreatedAt:         createdAt,
-				AuthorLogin:       comment.Author.Login,
-				ReviewDatabaseID:  reviewDatabaseID,
-				ReplyToDatabaseID: replyTo,
+				NodeID:             comment.ID,
+				DatabaseID:         comment.DatabaseID,
+				Body:               comment.Body,
+				CreatedAt:          createdAt,
+				AuthorLogin:        comment.Author.Login,
+				ReviewDatabaseID:   reviewDatabaseID,
+				ReplyToDatabaseID:  replyTo,
+				ReplyToCommentNode: replyToNode,
 			})
 		}
 
@@ -182,11 +195,12 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 	}
 
 	filters := FilterOptions{
-		Reviewer:           opts.Reviewer,
-		States:             opts.States,
-		RequireUnresolved:  opts.RequireUnresolved,
-		RequireNotOutdated: opts.RequireNotOutdated,
-		TailReplies:        opts.TailReplies,
+		Reviewer:             opts.Reviewer,
+		States:               opts.States,
+		RequireUnresolved:    opts.RequireUnresolved,
+		RequireNotOutdated:   opts.RequireNotOutdated,
+		TailReplies:          opts.TailReplies,
+		IncludeCommentNodeID: opts.IncludeCommentNodeID,
 	}
 
 	return BuildReport(reviews, threads, filters), nil

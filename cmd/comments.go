@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -22,13 +20,13 @@ func newCommentsCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "comments",
-		Short: "Reply to pull request review comments",
+		Short: "Reply to pull request review threads",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := cmd.Help(); err != nil {
 				return err
 			}
-			return errors.New("use 'gh pr-review comments reply' to respond to a review comment; run 'gh pr-review review report' to locate comment IDs")
+			return errors.New("use 'gh pr-review comments reply' to respond to a review thread; run 'gh pr-review review report' to locate thread IDs")
 		},
 	}
 
@@ -45,7 +43,7 @@ func newCommentsReplyCommand(parent *commentsOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "reply [<number> | <url> | <owner>/<repo>#<number>]",
-		Short: "Reply to a pull request review comment",
+		Short: "Reply to a pull request review thread",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -63,22 +61,24 @@ func newCommentsReplyCommand(parent *commentsOptions) *cobra.Command {
 
 	cmd.Flags().StringVarP(&opts.Repo, "repo", "R", "", "Repository in 'owner/repo' format")
 	cmd.Flags().IntVar(&opts.Pull, "pr", 0, "Pull request number")
-	cmd.Flags().Int64Var(&opts.CommentID, "comment-id", 0, "Review comment identifier to reply to")
+	cmd.Flags().StringVar(&opts.ThreadID, "thread-id", "", "Review thread identifier to reply to")
+	cmd.Flags().StringVar(&opts.ReviewID, "review-id", "", "GraphQL review identifier when replying inside a pending review")
 	cmd.Flags().StringVar(&opts.Body, "body", "", "Reply text")
 	cmd.Flags().BoolVar(&opts.Concise, "concise", false, "Emit minimal reply payload { \"id\" }")
-	_ = cmd.MarkFlagRequired("comment-id")
+	_ = cmd.MarkFlagRequired("thread-id")
 	_ = cmd.MarkFlagRequired("body")
 
 	return cmd
 }
 
 type commentsReplyOptions struct {
-	Repo      string
-	Pull      int
-	Selector  string
-	CommentID int64
-	Body      string
-	Concise   bool
+	Repo     string
+	Pull     int
+	Selector string
+	ThreadID string
+	ReviewID string
+	Body     string
+	Concise  bool
 }
 
 func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
@@ -96,23 +96,18 @@ func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
 	service := comments.NewService(apiClientFactory(identity.Host))
 
 	reply, err := service.Reply(identity, comments.ReplyOptions{
-		CommentID: opts.CommentID,
-		Body:      opts.Body,
+		ThreadID: opts.ThreadID,
+		ReviewID: opts.ReviewID,
+		Body:     opts.Body,
 	})
 	if err != nil {
 		return err
 	}
 	if opts.Concise {
-		var minimal struct {
-			ID int64 `json:"id"`
-		}
-		if err := json.Unmarshal(reply, &minimal); err != nil {
-			return fmt.Errorf("parse reply payload: %w", err)
-		}
-		if minimal.ID == 0 {
+		if reply.ID == "" {
 			return errors.New("reply response missing id")
 		}
-		return encodeJSON(cmd, map[string]int64{"id": minimal.ID})
+		return encodeJSON(cmd, map[string]string{"id": reply.ID})
 	}
 	return encodeJSON(cmd, reply)
 }

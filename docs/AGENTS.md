@@ -5,7 +5,7 @@ This guide provides ready-to-run prompts for scripted or agent-driven use of
 include only values present in upstream responses (no null placeholders).
 Empty collections are emitted as `[]` instead of `null`, and the
 `comments reply --concise` mode returns `{ "id" }` when you only need the
-database identifier.
+GraphQL comment identifier.
 
 ## 1. Review a pull request end-to-end
 
@@ -34,8 +34,8 @@ gh pr-review review --submit \
 # GraphQL errors emit:
 # { "status": "Review submission failed", "errors": [ ... ] }
 
-# Summarize reviews and collect comment IDs
-gh pr-review review report --reviewer octocat owner/repo#42
+# Summarize reviews and collect thread IDs
+gh pr-review review report --reviewer octocat --include-comment-node-id owner/repo#42
 ```
 
 > **Note:** `--review-id` always expects the GraphQL review node ID (prefixed
@@ -47,18 +47,27 @@ gh pr-review review report --reviewer octocat owner/repo#42
 ## 2. Read and reply to inline comments
 
 ```sh
-# Capture review threads and comment IDs (GraphQL)
-gh pr-review review report --unresolved owner/repo#42
+# Capture review threads (optionally include comment node IDs)
+gh pr-review review report --unresolved --include-comment-node-id owner/repo#42
 
-# Reply to a comment by database identifier
+# Reply to a thread
 gh pr-review comments reply \
-  --comment-id <comment-id> \
+  --thread-id <thread-id> \
   --body "Thanks for catching this" \
+  owner/repo#42
+
+# Reply to a pending review thread by providing the review ID
+gh pr-review comments reply \
+  --thread-id <thread-id> \
+  --review-id <review-id> \
+  --body "Submitting from pending" \
   owner/repo#42
 ```
 
-Inspect the JSON returned by `review report`, select the desired comment `id`,
-and supply that value as `<comment-id>` when invoking `comments reply`.
+Inspect the JSON returned by `review report`, select the desired `thread_id`
+and, when needed, the `comment_node_id` to correlate individual replies.
+Supply the `thread_id` (and `--review-id` when replying inside a pending
+review) when invoking `comments reply`.
 
 ## 3. Resolve or reopen discussion threads
 

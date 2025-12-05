@@ -14,11 +14,12 @@ const (
 
 // FilterOptions controls shaping of reviews and threads.
 type FilterOptions struct {
-	Reviewer           string
-	States             []State
-	RequireUnresolved  bool
-	RequireNotOutdated bool
-	TailReplies        int
+	Reviewer             string
+	States               []State
+	RequireUnresolved    bool
+	RequireNotOutdated   bool
+	TailReplies          int
+	IncludeCommentNodeID bool
 }
 
 // Review models a pull request review fetched from GraphQL.
@@ -43,12 +44,14 @@ type Thread struct {
 
 // ThreadComment represents a single comment node within a thread.
 type ThreadComment struct {
-	DatabaseID        int
-	Body              string
-	CreatedAt         time.Time
-	AuthorLogin       string
-	ReviewDatabaseID  *int
-	ReplyToDatabaseID *int
+	NodeID             string
+	DatabaseID         int
+	Body               string
+	CreatedAt          time.Time
+	AuthorLogin        string
+	ReviewDatabaseID   *int
+	ReplyToDatabaseID  *int
+	ReplyToCommentNode *string
 }
 
 // Report is the serialized output structure for the report command.
@@ -68,22 +71,23 @@ type ReportReview struct {
 
 // ReportComment contains the shaped parent comment for a thread.
 type ReportComment struct {
-	ID          int           `json:"id"`
-	Path        string        `json:"path"`
-	Line        *int          `json:"line,omitempty"`
-	AuthorLogin string        `json:"author_login"`
-	Body        string        `json:"body"`
-	CreatedAt   string        `json:"created_at"`
-	IsResolved  bool          `json:"is_resolved"`
-	IsOutdated  bool          `json:"is_outdated"`
-	Thread      []ThreadReply `json:"thread"`
+	ThreadID      string        `json:"thread_id"`
+	CommentNodeID *string       `json:"comment_node_id,omitempty"`
+	Path          string        `json:"path"`
+	Line          *int          `json:"line,omitempty"`
+	AuthorLogin   string        `json:"author_login"`
+	Body          string        `json:"body"`
+	CreatedAt     string        `json:"created_at"`
+	IsResolved    bool          `json:"is_resolved"`
+	IsOutdated    bool          `json:"is_outdated"`
+	Thread        []ThreadReply `json:"thread"`
 }
 
 // ThreadReply captures a reply within a thread.
 type ThreadReply struct {
-	ID          int    `json:"id"`
-	InReplyToID *int   `json:"in_reply_to_id,omitempty"`
-	AuthorLogin string `json:"author_login"`
-	Body        string `json:"body"`
-	CreatedAt   string `json:"created_at"`
+	CommentNodeID          *string `json:"comment_node_id,omitempty"`
+	InReplyToCommentNodeID *string `json:"in_reply_to_comment_node_id,omitempty"`
+	AuthorLogin            string  `json:"author_login"`
+	Body                   string  `json:"body"`
+	CreatedAt              string  `json:"created_at"`
 }

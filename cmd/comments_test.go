@@ -53,14 +53,41 @@ func TestCommentsReplyCommand(t *testing.T) {
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
-	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		switch path {
-		case "repos/octo/demo/pulls/7/comments/5/replies":
-			payload := map[string]interface{}{"id": 99, "body": "ack"}
-			return assignJSON(result, payload)
-		default:
-			return errors.New("unexpected path")
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		require.Contains(t, query, "AddPullRequestReviewThreadReply")
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "PRRT_thread", input["pullRequestReviewThreadId"])
+		require.Equal(t, "ack", input["body"])
+		require.Equal(t, "PRR_pending", input["pullRequestReviewId"])
+
+		payload := map[string]interface{}{
+			"addPullRequestReviewThreadReply": map[string]interface{}{
+				"comment": map[string]interface{}{
+					"id":         "PRRC_reply",
+					"databaseId": 101,
+					"body":       "ack",
+					"diffHunk":   "@@ -10,5 +10,7 @@",
+					"path":       "internal/service.go",
+					"url":        "https://example.com/comment",
+					"createdAt":  "2025-12-03T10:00:00Z",
+					"updatedAt":  "2025-12-03T10:05:00Z",
+					"author":     map[string]interface{}{"login": "octocat"},
+					"pullRequestReview": map[string]interface{}{
+						"id":         "PRR_pending",
+						"databaseId": 202,
+						"state":      "PENDING",
+					},
+					"pullRequestReviewThread": map[string]interface{}{
+						"id":         "PRRT_thread",
+						"isResolved": false,
+						"isOutdated": false,
+					},
+					"replyTo": map[string]interface{}{"id": "PRRC_parent"},
+				},
+			},
 		}
+		return assignJSON(result, payload)
 	}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
@@ -69,7 +96,7 @@ func TestCommentsReplyCommand(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"comments", "reply", "--comment-id", "5", "--body", "ack", "octo/demo#7"})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--review-id", "PRR_pending", "--body", "ack", "octo/demo#7"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -77,8 +104,20 @@ func TestCommentsReplyCommand(t *testing.T) {
 
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
-	assert.Equal(t, float64(99), payload["id"])
+	assert.Equal(t, "PRRC_reply", payload["id"])
 	assert.Equal(t, "ack", payload["body"])
+	assert.Equal(t, "PRRT_thread", payload["thread_id"])
+	assert.Equal(t, "octocat", payload["author_login"])
+	assert.Equal(t, "https://example.com/comment", payload["html_url"])
+	assert.Equal(t, "internal/service.go", payload["path"])
+	assert.Equal(t, float64(101), payload["database_id"])
+	assert.Equal(t, "@@ -10,5 +10,7 @@", payload["diff_hunk"])
+	assert.Equal(t, false, payload["thread_is_resolved"])
+	assert.Equal(t, false, payload["thread_is_outdated"])
+	assert.Equal(t, "PRRC_parent", payload["reply_to_comment_id"])
+	assert.Equal(t, "PRR_pending", payload["review_id"])
+	assert.Equal(t, float64(202), payload["review_database_id"])
+	assert.Equal(t, "PENDING", payload["review_state"])
 }
 
 func TestCommentsReplyCommandConcise(t *testing.T) {
@@ -86,14 +125,38 @@ func TestCommentsReplyCommandConcise(t *testing.T) {
 	defer func() { apiClientFactory = originalFactory }()
 
 	fake := &commandFakeAPI{}
-	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
-		switch path {
-		case "repos/octo/demo/pulls/7/comments/5/replies":
-			payload := map[string]interface{}{"id": 101, "body": "ack"}
-			return assignJSON(result, payload)
-		default:
-			return errors.New("unexpected path")
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		require.Contains(t, query, "AddPullRequestReviewThreadReply")
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "PRRT_thread", input["pullRequestReviewThreadId"])
+		require.Equal(t, "ack", input["body"])
+		_, hasReview := input["pullRequestReviewId"]
+		require.False(t, hasReview)
+
+		payload := map[string]interface{}{
+			"addPullRequestReviewThreadReply": map[string]interface{}{
+				"comment": map[string]interface{}{
+					"id":                "PRRC_reply",
+					"databaseId":        nil,
+					"body":              "ack",
+					"diffHunk":          "",
+					"path":              "",
+					"url":               "https://example.com/comment",
+					"createdAt":         "2025-12-03T10:00:00Z",
+					"updatedAt":         "2025-12-03T10:05:00Z",
+					"author":            map[string]interface{}{"login": "octocat"},
+					"pullRequestReview": nil,
+					"pullRequestReviewThread": map[string]interface{}{
+						"id":         "PRRT_thread",
+						"isResolved": true,
+						"isOutdated": false,
+					},
+					"replyTo": nil,
+				},
+			},
 		}
+		return assignJSON(result, payload)
 	}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
@@ -102,7 +165,7 @@ func TestCommentsReplyCommandConcise(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"comments", "reply", "--comment-id", "5", "--body", "ack", "--concise", "octo/demo#7"})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body", "ack", "--concise", "octo/demo#7"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -111,7 +174,7 @@ func TestCommentsReplyCommandConcise(t *testing.T) {
 	var payload map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	assert.Equal(t, 1, len(payload))
-	assert.Equal(t, float64(101), payload["id"])
+	assert.Equal(t, "PRRC_reply", payload["id"])
 }
 
 func assignJSON(result interface{}, payload interface{}) error {

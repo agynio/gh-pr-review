@@ -1,4 +1,4 @@
-# Output schemas (v1.3.4)
+# Output schemas (v1.4.0)
 
 Optional fields are omitted entirely (never serialized as `null`). Unless noted,
 schemas disallow additional properties to surface unexpected payload changes.
@@ -117,7 +117,7 @@ Emitted by `review report`.
     "ReportComment": {
       "type": "object",
       "required": [
-        "id",
+        "thread_id",
         "path",
         "author_login",
         "body",
@@ -127,9 +127,13 @@ Emitted by `review report`.
         "thread"
       ],
       "properties": {
-        "id": {
-          "type": "integer",
-          "minimum": 1
+        "thread_id": {
+          "type": "string",
+          "description": "GraphQL review thread identifier"
+        },
+        "comment_node_id": {
+          "type": "string",
+          "description": "GraphQL comment node identifier when requested"
         },
         "path": {
           "type": "string"
@@ -167,13 +171,13 @@ Emitted by `review report`.
       "type": "object",
       "required": ["id", "author_login", "body", "created_at"],
       "properties": {
-        "id": {
-          "type": "integer",
-          "minimum": 1
+        "comment_node_id": {
+          "type": "string",
+          "description": "GraphQL comment node identifier when requested"
         },
-        "in_reply_to_id": {
-          "type": ["integer", "null"],
-          "minimum": 1
+        "in_reply_to_comment_node_id": {
+          "type": "string",
+          "description": "GraphQL node ID of the parent comment"
         },
         "author_login": {
           "type": "string"
@@ -196,9 +200,6 @@ Emitted by `review report`.
 
 Default payload from `comments reply`.
 
-This schema captures the stable subset that the extension relies on while
-allowing additional GitHub REST fields to pass through unchanged.
-
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -206,36 +207,50 @@ allowing additional GitHub REST fields to pass through unchanged.
   "type": "object",
   "required": [
     "id",
-    "node_id",
-    "pull_request_review_id",
+    "thread_id",
+    "thread_is_resolved",
+    "thread_is_outdated",
     "body",
-    "user",
-    "path",
+    "author_login",
     "html_url",
     "created_at",
     "updated_at"
   ],
   "properties": {
     "id": {
+      "type": "string",
+      "description": "GraphQL comment node identifier"
+    },
+    "database_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Numeric comment identifier when persisted"
+    },
+    "review_id": {
+      "type": "string",
+      "description": "GraphQL review identifier when attached to a review"
+    },
+    "review_database_id": {
       "type": "integer",
       "minimum": 1
     },
-    "node_id": {
+    "review_state": {
       "type": "string"
     },
-    "pull_request_review_id": {
-      "type": "integer",
-      "minimum": 1
+    "thread_id": {
+      "type": "string"
     },
-    "in_reply_to_id": {
-      "type": "integer",
-      "minimum": 1
+    "thread_is_resolved": {
+      "type": "boolean"
+    },
+    "thread_is_outdated": {
+      "type": "boolean"
+    },
+    "reply_to_comment_id": {
+      "type": "string"
     },
     "body": {
       "type": "string"
-    },
-    "user": {
-      "$ref": "#/$defs/ReplyUser"
     },
     "diff_hunk": {
       "type": "string"
@@ -243,17 +258,12 @@ allowing additional GitHub REST fields to pass through unchanged.
     "path": {
       "type": "string"
     },
-    "line": {
-      "type": ["integer", "null"],
-      "description": "Replies inside threads may omit diff coordinates"
-    },
-    "side": {
-      "type": ["string", "null"],
-      "enum": ["LEFT", "RIGHT", null]
-    },
     "html_url": {
       "type": "string",
       "format": "uri"
+    },
+    "author_login": {
+      "type": "string"
     },
     "created_at": {
       "type": "string",
@@ -264,23 +274,7 @@ allowing additional GitHub REST fields to pass through unchanged.
       "format": "date-time"
     }
   },
-  "additionalProperties": true,
-  "$defs": {
-    "ReplyUser": {
-      "type": "object",
-      "properties": {
-        "login": {
-          "type": "string"
-        },
-        "id": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "required": ["login", "id"],
-      "additionalProperties": true
-    }
-  }
+  "additionalProperties": false
 }
 ```
 
@@ -296,8 +290,7 @@ Minimal payload from `comments reply --concise`.
   "required": ["id"],
   "properties": {
     "id": {
-      "type": "integer",
-      "minimum": 1
+      "type": "string"
     }
   },
   "additionalProperties": false
