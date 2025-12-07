@@ -9,7 +9,10 @@ and resolves discussions without cloning repositories.
 - [Review view](#review-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
-- [Release 1.6.0](#release-160)
+
+
+Paper: https://agyn.io/blog/gh-pr-review-cli-agent-workflows
+
 
 ## Quickstart
 
