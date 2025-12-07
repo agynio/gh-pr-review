@@ -156,7 +156,7 @@ type fakeViewAPI struct {
 }
 
 func (f *fakeViewAPI) REST(string, string, map[string]string, interface{}, interface{}) error {
-	f.t.Fatalf("unexpected REST call in report command")
+	f.t.Fatalf("unexpected REST call in view command")
 	return nil
 }
 
