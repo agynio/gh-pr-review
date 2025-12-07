@@ -18,9 +18,9 @@ The quickest path from opening a pending review to resolving threads:
 1. **Install or upgrade the extension.**
 
    ```sh
-   gh extension install Agyn-sandbox/gh-pr-review
+   gh extension install Agynio/gh-pr-review
    # Update an existing installation
-   gh extension upgrade Agyn-sandbox/gh-pr-review
+   gh extension upgrade Agynio/gh-pr-review
    ```
 
 
@@ -166,9 +166,9 @@ gh pr-review review view -R owner/repo --pr 3
 Install or upgrade to **v1.6.0 or newer** (GraphQL-only thread resolution and minimal comment replies):
 
 ```sh
-gh extension install Agyn-sandbox/gh-pr-review
+gh extension install Agynio/gh-pr-review
 # Update an existing installation
-gh extension upgrade Agyn-sandbox/gh-pr-review
+gh extension upgrade Agynio/gh-pr-review
 ```
 
 ### Command behavior
