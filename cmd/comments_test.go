@@ -46,7 +46,7 @@ func TestCommentsCommandRootShowsGuidance(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "comments reply")
-	assert.Contains(t, err.Error(), "review report")
+	assert.Contains(t, err.Error(), "review view")
 }
 
 func TestCommentsReplyCommand(t *testing.T) {
@@ -116,7 +116,7 @@ func TestCommentsReplyCommand(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--review-id", "PRR_pending", "--body", "ack", "octo/demo#7"})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--review-id", "PRR_pending", "--body", "ack", "--repo", "octo/demo", "7"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestCommentsReplyCommandWithoutReviewID(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body", "ack", "octo/demo#7"})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body", "ack", "--repo", "octo/demo", "7"})
 
 	err := root.Execute()
 	require.NoError(t, err)

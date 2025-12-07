@@ -13,13 +13,13 @@ import (
 )
 
 //go:embed testdata/report_response.json
-var reportResponse []byte
+var viewResponse []byte
 
-func TestReviewReportCommandFiltersOutput(t *testing.T) {
+func TestReviewViewCommandFiltersOutput(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
-	fake := &fakeReportAPI{payload: reportResponse, t: t}
+	fake := &fakeViewAPI{payload: viewResponse, t: t}
 	apiClientFactory = func(host string) ghcli.API {
 		if host == "" {
 			t.Fatalf("expected host to be resolved, got empty")
@@ -31,7 +31,7 @@ func TestReviewReportCommandFiltersOutput(t *testing.T) {
 	buf := &bytes.Buffer{}
 	root.SetOut(buf)
 	root.SetErr(io.Discard)
-	root.SetArgs([]string{"review", "report", "agyn/repo#51", "--reviewer", "alice", "--states", "APPROVED,COMMENTED", "--not_outdated", "--tail", "1"})
+	root.SetArgs([]string{"review", "view", "--repo", "agyn/repo", "--reviewer", "alice", "--states", "APPROVED,COMMENTED", "--not_outdated", "--tail", "1", "51"})
 
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute command: %v", err)
@@ -90,11 +90,11 @@ func TestReviewReportCommandFiltersOutput(t *testing.T) {
 	}
 }
 
-func TestReviewReportCommandInvalidState(t *testing.T) {
+func TestReviewViewCommandInvalidState(t *testing.T) {
 	root := newRootCommand()
 	root.SetOut(io.Discard)
 	root.SetErr(io.Discard)
-	root.SetArgs([]string{"review", "report", "agyn/repo#51", "--states", "unknown"})
+	root.SetArgs([]string{"review", "view", "--repo", "agyn/repo", "--states", "unknown", "51"})
 
 	err := root.Execute()
 	if err == nil {
@@ -105,18 +105,18 @@ func TestReviewReportCommandInvalidState(t *testing.T) {
 	}
 }
 
-func TestReviewReportCommandIncludesCommentNodeID(t *testing.T) {
+func TestReviewViewCommandIncludesCommentNodeID(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
 
-	fake := &fakeReportAPI{payload: reportResponse, t: t}
+	fake := &fakeViewAPI{payload: viewResponse, t: t}
 	apiClientFactory = func(host string) ghcli.API { return fake }
 
 	root := newRootCommand()
 	buf := &bytes.Buffer{}
 	root.SetOut(buf)
 	root.SetErr(io.Discard)
-	root.SetArgs([]string{"review", "report", "agyn/repo#51", "--include-comment-node-id"})
+	root.SetArgs([]string{"review", "view", "--repo", "agyn/repo", "--include-comment-node-id", "51"})
 
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute command: %v", err)
@@ -149,18 +149,18 @@ func TestReviewReportCommandIncludesCommentNodeID(t *testing.T) {
 	}
 }
 
-type fakeReportAPI struct {
+type fakeViewAPI struct {
 	t         *testing.T
 	payload   []byte
 	variables map[string]interface{}
 }
 
-func (f *fakeReportAPI) REST(string, string, map[string]string, interface{}, interface{}) error {
-	f.t.Fatalf("unexpected REST call in report command")
+func (f *fakeViewAPI) REST(string, string, map[string]string, interface{}, interface{}) error {
+	f.t.Fatalf("unexpected REST call in view command")
 	return nil
 }
 
-func (f *fakeReportAPI) GraphQL(query string, variables map[string]interface{}, result interface{}) error {
+func (f *fakeViewAPI) GraphQL(query string, variables map[string]interface{}, result interface{}) error {
 	f.variables = variables
 	return json.Unmarshal(f.payload, result)
 }

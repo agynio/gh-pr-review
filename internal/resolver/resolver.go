@@ -11,8 +11,7 @@ import (
 )
 
 var (
-	pullURLRE       = regexp.MustCompile(`^/([^/]+)/([^/]+)/pull/([0-9]+)(?:/.*)?$`)
-	fullReferenceRE = regexp.MustCompile(`^(?:([^/]+)/([^/]+))#([0-9]+)$`)
+	pullURLRE = regexp.MustCompile(`^/([^/]+)/([^/]+)/pull/([0-9]+)(?:/.*)?$`)
 )
 
 // Identity represents a fully-resolved pull request reference.
@@ -40,7 +39,15 @@ func NormalizeSelector(selector string, prFlag int) (string, error) {
 		return "", errors.New("must specify a pull request via --pr or selector")
 	}
 
-	return selector, nil
+	if isNumeric(selector) {
+		return selector, nil
+	}
+
+	if _, err := parsePullURL(selector); err == nil {
+		return selector, nil
+	}
+
+	return "", fmt.Errorf("invalid pull request selector %q: must be a pull request URL or number", selector)
 }
 
 // Resolve interprets a selector, optional repo flag, and host (GH_HOST) into a concrete pull request identity.
@@ -57,12 +64,7 @@ func Resolve(selector, repoFlag, host string) (Identity, error) {
 		return id, nil
 	}
 
-	if id, err := parseFullReference(selector, host); err == nil {
-		return id, nil
-	}
-
-	trimmed := strings.TrimPrefix(selector, "#")
-	if n, err := strconv.Atoi(trimmed); err == nil && n > 0 {
+	if n, err := strconv.Atoi(selector); err == nil && n > 0 {
 		owner, repo, err := splitRepo(repoFlag)
 		if err != nil {
 			return Identity{}, fmt.Errorf("--repo must be owner/repo when using numeric selectors: %w", err)
@@ -71,10 +73,6 @@ func Resolve(selector, repoFlag, host string) (Identity, error) {
 	}
 
 	return Identity{}, fmt.Errorf("invalid pull request selector: %q", selector)
-}
-
-func defaultHost(host string) string {
-	return sanitizeHost(host)
 }
 
 func parsePullURL(raw string) (Identity, error) {
@@ -98,32 +96,26 @@ func parsePullURL(raw string) (Identity, error) {
 	}, nil
 }
 
-func parseFullReference(raw, host string) (Identity, error) {
-	matches := fullReferenceRE.FindStringSubmatch(raw)
-	if matches == nil {
-		return Identity{}, errors.New("invalid reference")
-	}
-	number, _ := strconv.Atoi(matches[3])
-	return Identity{
-		Owner:  matches[1],
-		Repo:   matches[2],
-		Host:   defaultHost(host),
-		Number: number,
-	}, nil
-}
-
 func matchesNumber(selector string, target int) bool {
 	if id, err := parsePullURL(selector); err == nil {
 		return id.Number == target
 	}
-	if id, err := parseFullReference(selector, ""); err == nil {
-		return id.Number == target
-	}
-	trimmed := strings.TrimPrefix(selector, "#")
-	if n, err := strconv.Atoi(trimmed); err == nil {
+	if n, err := strconv.Atoi(selector); err == nil {
 		return n == target
 	}
 	return false
+}
+
+func isNumeric(selector string) bool {
+	if selector == "" {
+		return false
+	}
+	for _, r := range selector {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func splitRepo(repoFlag string) (string, string, error) {

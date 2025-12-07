@@ -10,7 +10,7 @@ returns `{ "comment_node_id": "PRRC_…" }` for minimal responses.
 
 ```sh
 # Start or resume a pending review for PR 42
-gh pr-review review --start owner/repo#42
+gh pr-review review --start -R owner/repo 42
 
 # Add an inline comment to the pending review
 gh pr-review review --add-comment \
@@ -18,14 +18,14 @@ gh pr-review review --add-comment \
   --path internal/service.go \
   --line 42 \
   --body "nit: use helper" \
-  owner/repo#42
+  -R owner/repo 42
 
 # Submit the review (COMMENT | APPROVE | REQUEST_CHANGES)
 gh pr-review review --submit \
   --review-id PRR_kwM123456 \
   --event APPROVE \
   --body "Looks good" \
-  owner/repo#42
+  -R owner/repo 42
 
 # Successful submissions emit:
 # { "status": "Review submitted successfully" }
@@ -34,7 +34,7 @@ gh pr-review review --submit \
 # { "status": "Review submission failed", "errors": [ ... ] }
 
 # Summarize reviews and collect thread IDs
-gh pr-review review report --reviewer octocat --include-comment-node-id owner/repo#42
+gh pr-review review view --reviewer octocat --include-comment-node-id -R owner/repo 42
 ```
 
 > **Note:** `--review-id` always expects the GraphQL review node ID (prefixed
@@ -47,23 +47,23 @@ gh pr-review review report --reviewer octocat --include-comment-node-id owner/re
 
 ```sh
 # Capture review threads (optionally include comment node IDs)
-gh pr-review review report --unresolved --include-comment-node-id owner/repo#42
+gh pr-review review view --unresolved --include-comment-node-id -R owner/repo 42
 
 # Reply to a thread
 gh pr-review comments reply \
   --thread-id <thread-id> \
   --body "Thanks for catching this" \
-  owner/repo#42
+  -R owner/repo 42
 
 # Reply to a pending review thread by providing the review ID
 gh pr-review comments reply \
   --thread-id <thread-id> \
   --review-id <review-id> \
   --body "Submitting from pending" \
-  owner/repo#42
+  -R owner/repo 42
 ```
 
-Inspect the JSON returned by `review report`, select the desired `thread_id`
+Inspect the JSON returned by `review view`, select the desired `thread_id`
 and, when needed, the `comment_node_id` to correlate individual replies.
 Supply the `thread_id` (and `--review-id` when replying inside a pending
 review) when invoking `comments reply`.
@@ -72,13 +72,13 @@ review) when invoking `comments reply`.
 
 ```sh
 # Resolve the thread using its GraphQL node ID
-gh pr-review threads resolve --thread-id <thread-id> owner/repo#42
+gh pr-review threads resolve --thread-id <thread-id> -R owner/repo 42
 
 # Reopen the thread if needed
-gh pr-review threads unresolve --thread-id <thread-id> owner/repo#42
+gh pr-review threads unresolve --thread-id <thread-id> -R owner/repo 42
 ```
 
-Use `review report` (optionally with `--include-comment-node-id`) or
+Use `review view` (optionally with `--include-comment-node-id`) or
 `threads list` to gather `thread_id` values before mutating them. Thread
 mutations return minimal JSON of the form
 `{ "thread_node_id": "PRRT_…", "is_resolved": true|false }`.

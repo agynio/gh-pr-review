@@ -6,10 +6,10 @@ request reviews. It manages pending GraphQL reviews, surfaces thread metadata,
 and resolves discussions without cloning repositories.
 
 - [Quickstart](#quickstart)
-- [Review report](#review-report)
+- [Review view](#review-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
-- [Release 1.5.0](#release-150)
+- [Release 1.6.0](#release-160)
 
 ## Quickstart
 
@@ -28,7 +28,7 @@ The quickest path from opening a pending review to resolving threads:
    node).
 
    ```sh
-   gh pr-review review --start owner/repo#42
+   gh pr-review review --start -R owner/repo 42
 
    {
      "id": "PRR_kwDOAAABbcdEFG12",
@@ -48,7 +48,7 @@ The quickest path from opening a pending review to resolving threads:
      --path internal/service.go \
      --line 42 \
      --body "nit: use helper" \
-     owner/repo#42
+     -R owner/repo 42
 
    {
      "id": "PRRT_kwDOAAABbcdEFG12",
@@ -58,13 +58,13 @@ The quickest path from opening a pending review to resolving threads:
    }
    ```
 
-4. **Inspect review threads (GraphQL).** `review report` surfaces pending
+4. **Inspect review threads (GraphQL).** `review view` surfaces pending
    review summaries, thread state, and inline comment metadata. Thread IDs are
    always included; enable `--include-comment-node-id` when you also need the
    individual comment node identifiers.
 
    ```sh
-   gh pr-review review report --reviewer octocat owner/repo#42
+   gh pr-review review view --reviewer octocat -R owner/repo 42
 
    {
      "reviews": [
@@ -94,7 +94,7 @@ The quickest path from opening a pending review to resolving threads:
    gh pr-review comments reply \
      --thread-id PRRT_kwDOAAABbcdEFG12 \
      --body "Follow-up addressed in commit abc123" \
-     owner/repo#42
+     -R owner/repo 42
    ```
 
 5. **Submit the review (GraphQL).** Reuse the pending review `PRR_…`
@@ -107,7 +107,7 @@ The quickest path from opening a pending review to resolving threads:
      --review-id PRR_kwDOAAABbcdEFG12 \
      --event REQUEST_CHANGES \
      --body "Please add tests" \
-     owner/repo#42
+     -R owner/repo 42
 
    {
      "status": "Review submitted successfully"
@@ -129,7 +129,7 @@ The quickest path from opening a pending review to resolving threads:
    when no threads match.
 
    ```sh
-   gh pr-review threads list --unresolved --mine owner/repo#42
+   gh pr-review threads list --unresolved --mine -R owner/repo 42
 
    [
      {
@@ -141,7 +141,7 @@ The quickest path from opening a pending review to resolving threads:
      }
    ]
 
-gh pr-review threads resolve --thread-id R_ywDoABC123 owner/repo#42
+gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
 
 {
   "thread_node_id": "R_ywDoABC123",
@@ -149,19 +149,19 @@ gh pr-review threads resolve --thread-id R_ywDoABC123 owner/repo#42
 }
    ```
 
-## Review report
+## Review view
 
-`gh pr-review review report` emits a GraphQL-only snapshot of pull request
+`gh pr-review review view` emits a GraphQL-only snapshot of pull request
 discussion. The response groups reviews → parent inline comments → thread
 replies, omitting optional fields entirely instead of returning `null`.
 
 Run it with either a combined selector or explicit flags:
 
 ```sh
-gh pr-review review report -R owner/repo --pr 3
+gh pr-review review view -R owner/repo --pr 3
 ```
 
-Install or upgrade to **v1.5.0 or newer** (GraphQL-only thread resolution and minimal comment replies):
+Install or upgrade to **v1.6.0 or newer** (GraphQL-only thread resolution and minimal comment replies):
 
 ```sh
 gh extension install Agyn-sandbox/gh-pr-review
@@ -193,16 +193,16 @@ gh extension upgrade Agyn-sandbox/gh-pr-review
 
 ```sh
 # Default: return all reviews, states, threads
-gh pr-review review report -R owner/repo --pr 3
+gh pr-review review view -R owner/repo --pr 3
 
 # Unresolved threads only
-gh pr-review review report -R owner/repo --pr 3 --unresolved
+gh pr-review review view -R owner/repo --pr 3 --unresolved
 
 # Focus changes requested from a single reviewer; keep only latest reply per thread
-gh pr-review review report -R owner/repo --pr 3 --reviewer alice --states CHANGES_REQUESTED --tail 1
+gh pr-review review view -R owner/repo --pr 3 --reviewer alice --states CHANGES_REQUESTED --tail 1
 
 # Drop outdated threads and include comment node IDs
-gh pr-review review report -R owner/repo --pr 3 --not_outdated --include-comment-node-id
+gh pr-review review view -R owner/repo --pr 3 --not_outdated --include-comment-node-id
 ```
 
 ### Output schema
@@ -266,7 +266,7 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 | --- | --- | --- |
 | `review --start` | GraphQL | Opens a pending review via `addPullRequestReview`. |
 | `review --add-comment` | GraphQL | Requires a `PRR_…` review node ID. |
-| `review report` | GraphQL | Aggregates reviews, inline comments, and replies (used for thread IDs). |
+| `review view` | GraphQL | Aggregates reviews, inline comments, and replies (used for thread IDs). |
 | `review --submit` | GraphQL | Finalizes a pending review via `submitPullRequestReview` using the `PRR_…` review node ID (executed through the internal `gh api graphql` wrapper). |
 | `comments reply` | GraphQL | Replies via `addPullRequestReviewThreadReply`; supply `--review-id` when responding from a pending review. |
 | `threads list` | GraphQL | Enumerates review threads for the pull request. |
@@ -276,7 +276,7 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 ## Additional docs
 
 - [docs/USAGE.md](docs/USAGE.md) — Command-by-command inputs, outputs, and
-  examples for v1.5.0.
+  examples for v1.6.0.
 - [docs/SCHEMAS.md](docs/SCHEMAS.md) — JSON schemas for each structured
   response (optional fields omitted rather than set to null).
 - [docs/AGENTS.md](docs/AGENTS.md) — Agent-focused workflows, prompts, and
@@ -284,7 +284,7 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 
 ## Design notes
 
-- Each command binds to exactly one GitHub backend: review report is
+- Each command binds to exactly one GitHub backend: review view is
   GraphQL-only, while comment listing/replying remain GraphQL-only. Optional
   REST lookups appear only when translating legacy IDs.
 - Optional fields are omitted entirely—never backfilled with empty strings or
@@ -305,13 +305,9 @@ Releases are built using the
 [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile)
 workflow to publish binaries for macOS, Linux, and Windows.
 
-## Release 1.5.0
+## Release 1.6.0
 
-- `threads resolve` / `threads unresolve` now exclusively accept GraphQL thread
-  node IDs and emit minimal JSON `{ "thread_node_id": "…", "is_resolved": true|false }`.
-- Removed the legacy `threads find` command and the `--comment-id` lookup path
-  used to translate REST comment identifiers.
-- `comments reply` always returns the minimal `{ "comment_node_id": "PRRC_…" }`
-  payload; the `--concise` flag has been removed.
-- Documentation updates cover the new flag, reply payload, and schema changes
-  required for this release.
+- Renamed `review report` to `review view`; update automation to call `gh pr-review review view`.
+- Pull request selectors now accept URLs or numbers with `-R owner/repo`; the `owner/repo#<number>` shorthand was removed.
+- `comments reply` accepts a positional pull request number (still requires `--thread-id` and `--body`).
+- Documentation and examples updated for the new selector format.

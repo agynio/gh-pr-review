@@ -1,13 +1,13 @@
 # Engineer Review Guide
 
-## `gh pr-review review report`
+## `gh pr-review review view`
 
 High-level summary of the pull request review activity. The command issues a
 single GraphQL operation and emits JSON grouped by review → parent inline
 comment → thread replies.
 
 ```bash
-gh pr-review review report <owner>/<repo>#<number>
+gh pr-review review view -R <owner>/<repo> <number>
 ```
 
 ### Default scope
@@ -31,7 +31,7 @@ gh pr-review review report <owner>/<repo>#<number>
 Example capturing the latest actionable work:
 
 ```bash
-gh pr-review review report agyn/repo#51 \
+gh pr-review review view -R agyn/repo 51 \
   --reviewer emerson \
   --states CHANGES_REQUESTED,COMMENTED \
   --unresolved \

@@ -28,7 +28,7 @@ func newThreadsListCommand() *cobra.Command {
 	opts := &threadsListOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "list [<number> | <url> | <owner>/<repo>#<number>]",
+		Use:   "list [<number> | <url>]",
 		Short: "List review threads for a pull request",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -98,7 +98,7 @@ func newThreadsMutationCommand(resolve bool) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   use + " [<number> | <url> | <owner>/<repo>#<number>]",
+		Use:   use + " [<number> | <url>]",
 		Short: short,
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

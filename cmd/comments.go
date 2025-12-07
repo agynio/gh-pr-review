@@ -26,7 +26,7 @@ func newCommentsCommand() *cobra.Command {
 			if err := cmd.Help(); err != nil {
 				return err
 			}
-			return errors.New("use 'gh pr-review comments reply' to respond to a review thread; run 'gh pr-review review report' to locate thread IDs")
+			return errors.New("use 'gh pr-review comments reply' to respond to a review thread; run 'gh pr-review review view' to locate thread IDs")
 		},
 	}
 
@@ -42,7 +42,7 @@ func newCommentsReplyCommand(parent *commentsOptions) *cobra.Command {
 	opts := &commentsReplyOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "reply [<number> | <url> | <owner>/<repo>#<number>]",
+		Use:   "reply [<number> | <url>]",
 		Short: "Reply to a pull request review thread",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

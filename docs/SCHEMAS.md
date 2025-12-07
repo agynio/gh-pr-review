@@ -1,4 +1,4 @@
-# Output schemas (v1.5.0)
+# Output schemas (v1.6.0)
 
 Optional fields are omitted entirely (never serialized as `null`). Unless noted,
 schemas disallow additional properties to surface unexpected payload changes.
@@ -66,7 +66,7 @@ Produced by `review --add-comment`.
 
 ## ReviewReport
 
-Emitted by `review report`.
+Emitted by `review view`.
 
 ```json
 {

@@ -87,7 +87,7 @@ func TestThreadsListCommandOutputsJSON(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"threads", "list", "--unresolved", "--mine", "octo/demo#5"})
+	root.SetArgs([]string{"threads", "list", "--unresolved", "--mine", "--repo", "octo/demo", "5"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestThreadsResolveCommandByThreadID(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"threads", "resolve", "--thread-id", "T_thread", "octo/demo#9"})
+	root.SetArgs([]string{"threads", "resolve", "--thread-id", "T_thread", "--repo", "octo/demo", "9"})
 
 	err := root.Execute()
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestThreadsUnresolveCommandByThreadID(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"threads", "unresolve", "--thread-id", "T_thread", "octo/demo#9"})
+	root.SetArgs([]string{"threads", "unresolve", "--thread-id", "T_thread", "--repo", "octo/demo", "9"})
 
 	err := root.Execute()
 	require.NoError(t, err)

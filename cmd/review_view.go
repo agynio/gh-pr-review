@@ -12,18 +12,18 @@ import (
 	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
 )
 
-func newReviewReportCommand() *cobra.Command {
-	opts := &reviewReportOptions{}
+func newReviewViewCommand() *cobra.Command {
+	opts := &reviewViewOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "report [<number> | <url> | <owner>/<repo>#<number>]",
-		Short: "Generate a structured review report (GraphQL)",
+		Use:   "view [<number> | <url>]",
+		Short: "View a structured review summary (GraphQL)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.Selector = args[0]
 			}
-			return runReviewReport(cmd, opts)
+			return runReviewView(cmd, opts)
 		},
 	}
 
@@ -39,7 +39,7 @@ func newReviewReportCommand() *cobra.Command {
 	return cmd
 }
 
-type reviewReportOptions struct {
+type reviewViewOptions struct {
 	Repo                 string
 	Pull                 int
 	Selector             string
@@ -51,7 +51,7 @@ type reviewReportOptions struct {
 	IncludeCommentNodeID bool
 }
 
-func runReviewReport(cmd *cobra.Command, opts *reviewReportOptions) error {
+func runReviewView(cmd *cobra.Command, opts *reviewViewOptions) error {
 	if opts.TailReplies < 0 {
 		return fmt.Errorf("invalid --tail value %d: must be non-negative", opts.TailReplies)
 	}

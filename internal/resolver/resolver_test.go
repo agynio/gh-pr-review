@@ -8,16 +8,24 @@ import (
 )
 
 func TestNormalizeSelector(t *testing.T) {
-	selector, err := NormalizeSelector("octo/demo#7", 7)
+	selector, err := NormalizeSelector("https://github.com/octo/demo/pull/7", 7)
 	require.NoError(t, err)
-	assert.Equal(t, "octo/demo#7", selector)
+	assert.Equal(t, "https://github.com/octo/demo/pull/7", selector)
+
+	selector, err = NormalizeSelector("7", 7)
+	require.NoError(t, err)
+	assert.Equal(t, "7", selector)
 
 	selector, err = NormalizeSelector("", 42)
 	require.NoError(t, err)
 	assert.Equal(t, "42", selector)
 
-	_, err = NormalizeSelector("octo/demo#7", 8)
+	_, err = NormalizeSelector("https://github.com/octo/demo/pull/7", 8)
 	require.Error(t, err)
+
+	_, err = NormalizeSelector("octo/demo#7", 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "URL or number")
 }
 
 func TestResolveURL(t *testing.T) {
@@ -26,14 +34,8 @@ func TestResolveURL(t *testing.T) {
 	assert.Equal(t, Identity{Owner: "octo", Repo: "demo", Host: "github.com", Number: 9}, id)
 }
 
-func TestResolveFullReference(t *testing.T) {
-	id, err := Resolve("octo/demo#5", "", "github.acme.com")
-	require.NoError(t, err)
-	assert.Equal(t, Identity{Owner: "octo", Repo: "demo", Host: "github.acme.com", Number: 5}, id)
-}
-
 func TestResolveHostSanitization(t *testing.T) {
-	id, err := Resolve("octo/demo#11", "", "HTTPS://GHE.EXAMPLE.COM:8443/")
+	id, err := Resolve("11", "octo/demo", "HTTPS://GHE.EXAMPLE.COM:8443/")
 	require.NoError(t, err)
 	assert.Equal(t, "ghe.example.com", id.Host)
 }

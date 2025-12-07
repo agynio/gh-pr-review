@@ -1,6 +1,6 @@
 # MCP Review Guide
 
-## Quick reference: `gh pr-review review report`
+## Quick reference: `gh pr-review review view`
 
 The command is GraphQL-only and performs a single query per invocation. It
 returns structured JSON that is agent-friendly and omits nullable fields.
@@ -10,8 +10,9 @@ returns structured JSON that is agent-friendly and omits nullable fields.
 ```json
 {
   "cmd": [
-    "gh", "pr-review", "review", "report",
-    "agyn/repo#51",
+    "gh", "pr-review", "review", "view",
+    "--repo", "agyn/repo",
+    "51",
     "--reviewer", "casey",
     "--states", "CHANGES_REQUESTED,COMMENTED",
     "--unresolved",

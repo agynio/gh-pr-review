@@ -1,10 +1,9 @@
-# Usage reference (v1.5.0)
+# Usage reference (v1.6.0)
 
-All commands accept pull request selectors in any GitHub CLI format:
+All commands accept pull request selectors as either:
 
-- `owner/repo#123`
 - a pull request URL (`https://github.com/owner/repo/pull/123`)
-- `-R owner/repo 123`
+- a pull request number when combined with `-R owner/repo`
 
 Unless stated otherwise, commands emit JSON only. Optional fields are omitted
 instead of serializing as `null`. Array responses default to `[]`.
@@ -22,7 +21,7 @@ instead of serializing as `null`. Array responses default to `[]`.
   `id` and `state`; optional `submitted_at`.
 
 ```sh
-gh pr-review review --start owner/repo#42
+gh pr-review review --start -R owner/repo 42
 
 {
   "id": "PRR_kwDOAAABbcdEFG12",
@@ -48,7 +47,7 @@ gh pr-review review --add-comment \
   --path internal/service.go \
   --line 42 \
   --body "nit: prefer helper" \
-  owner/repo#42
+  -R owner/repo 42
 
 {
   "id": "PRRT_kwDOAAABbcdEFG12",
@@ -58,14 +57,14 @@ gh pr-review review --add-comment \
 }
 ```
 
-## review report (GraphQL only)
+## review view (GraphQL only)
 
 - **Purpose:** Emit a consolidated snapshot of reviews, inline comments, and
   replies. Use it to capture thread identifiers before replying or resolving
   discussions.
 - **Inputs:**
-  - Optional pull request selector argument (`owner/repo#123` or URL).
-  - `--repo` / `--pr` flags when not using the selector shorthand.
+- Optional pull request selector argument (URL or number with `--repo`).
+  - `--repo` / `--pr` flags when not providing the positional number.
   - Filters: `--reviewer`, `--states`, `--unresolved`, `--not_outdated`,
     `--tail`.
   - `--include-comment-node-id` to surface GraphQL comment IDs on parent
@@ -74,7 +73,7 @@ gh pr-review review --add-comment \
 - **Output shape:**
 
 ```sh
-gh pr-review review report --reviewer octocat --states CHANGES_REQUESTED owner/repo#42
+gh pr-review review view --reviewer octocat --states CHANGES_REQUESTED -R owner/repo 42
 
 {
   "reviews": [
@@ -125,7 +124,7 @@ gh pr-review review --submit \
   --review-id PRR_kwDOAAABbcdEFG12 \
   --event REQUEST_CHANGES \
   --body "Please cover edge cases" \
-  owner/repo#42
+  -R owner/repo 42
 
 {
   "status": "Review submitted successfully"
@@ -140,7 +139,7 @@ gh pr-review review --submit \
 }
 ```
 
-> **Tip:** `review report` is the preferred way to discover review metadata
+> **Tip:** `review view` is the preferred way to discover review metadata
 > (pending review IDs, thread IDs, optional comment node IDs, thread state)
 > before mutating threads or
 > replying.
@@ -160,7 +159,7 @@ gh pr-review review --submit \
 gh pr-review comments reply \
   --thread-id PRRT_kwDOAAABbFg12345 \
   --body "Ack" \
-  owner/repo#42
+  -R owner/repo 42
 
 {
   "comment_node_id": "PRRC_kwDOAAABbhi7890"
@@ -177,7 +176,7 @@ gh pr-review comments reply \
 - **Output schema:** Array of [`ThreadSummary`](SCHEMAS.md#threadsummary).
 
 ```sh
-gh pr-review threads list --unresolved --mine owner/repo#42
+gh pr-review threads list --unresolved --mine -R owner/repo 42
 
 [
   {
@@ -200,7 +199,7 @@ gh pr-review threads list --unresolved --mine owner/repo#42
 - **Output schema:** [`ThreadMutationResult`](SCHEMAS.md#threadmutationresult).
 
 ```sh
-gh pr-review threads resolve --thread-id R_ywDoABC123 owner/repo#42
+gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
 
 {
   "thread_node_id": "R_ywDoABC123",
