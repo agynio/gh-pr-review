@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
-	"github.com/Agyn-sandbox/gh-pr-review/internal/threads"
+    "github.com/agynio/gh-pr-review/internal/resolver"
+    "github.com/agynio/gh-pr-review/internal/threads"
 )
 
 func newThreadsCommand() *cobra.Command {

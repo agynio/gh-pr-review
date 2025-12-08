@@ -7,7 +7,7 @@ import (
 
 	_ "embed"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
+    "github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 //go:embed testdata/report_response.json

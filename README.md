@@ -32,9 +32,9 @@ The quickest path from opening a pending review to resolving threads:
 1. **Install or upgrade the extension.**
 
    ```sh
-   gh extension install Agynio/gh-pr-review
+   gh extension install agynio/gh-pr-review
    # Update an existing installation
-   gh extension upgrade Agynio/gh-pr-review
+   gh extension upgrade agynio/gh-pr-review
    ```
 
 
@@ -180,9 +180,9 @@ gh pr-review review view -R owner/repo --pr 3
 Install or upgrade to **v1.6.0 or newer** (GraphQL-only thread resolution and minimal comment replies):
 
 ```sh
-gh extension install Agynio/gh-pr-review
+gh extension install agynio/gh-pr-review
 # Update an existing installation
-gh extension upgrade Agynio/gh-pr-review
+gh extension upgrade agynio/gh-pr-review
 ```
 
 ### Command behavior
@@ -336,4 +336,3 @@ CGO_ENABLED=0 golangci-lint run
 Releases are built using the
 [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile)
 workflow to publish binaries for macOS, Linux, and Windows.
-

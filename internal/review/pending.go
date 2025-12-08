@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
+    "github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 // PendingOptions configures lookup of the latest pending review for a reviewer.

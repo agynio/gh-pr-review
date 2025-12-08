@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
+    "github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 // LatestOptions configures lookup of the latest submitted review for a reviewer.

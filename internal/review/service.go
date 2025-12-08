@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/ghcli"
-	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
+    "github.com/agynio/gh-pr-review/internal/ghcli"
+    "github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 // Service coordinates review GraphQL operations through the gh CLI.

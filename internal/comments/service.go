@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Agyn-sandbox/gh-pr-review/internal/ghcli"
-	"github.com/Agyn-sandbox/gh-pr-review/internal/resolver"
+    "github.com/agynio/gh-pr-review/internal/ghcli"
+    "github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 const addThreadReplyMutation = `mutation AddPullRequestReviewThreadReply($input: AddPullRequestReviewThreadReplyInput!) {

@@ -1,4 +1,4 @@
-module github.com/Agyn-sandbox/gh-pr-review
+module github.com/agynio/gh-pr-review
 
 go 1.22
 
