@@ -20,6 +20,7 @@ Designed for developers, DevOps teams, and AI systems that need **full pull requ
 - [Review view](#review-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
+- [Design for LLMs & Automated Agents](#design-for-llms--automated-agents)
 
 
 
@@ -297,15 +298,31 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 - [docs/AGENTS.md](docs/AGENTS.md) — Agent-focused workflows, prompts, and
   best practices.
 
-## Design notes
+## Design for LLMs & Automated Agents
 
-- Each command binds to exactly one GitHub backend: review view is
-  GraphQL-only, while comment listing/replying remain GraphQL-only. Optional
-  REST lookups appear only when translating legacy IDs.
-- Optional fields are omitted entirely—never backfilled with empty strings or
-  `null` placeholders.
-- Output is optimized for headless and LLM workflows (stable ordering, minimal
-  decoration, machine-friendly JSON).
+`gh-pr-review` is designed to give LLMs and agents the **exact PR review context they need** — without the noisy, multi-step GitHub API workflow.
+
+### Why it's LLM-friendly
+
+- **Replaces multi-call API chains with one command**  
+  Instead of calling `list reviews → list thread comments → list comments`,  
+  a single `gh pr-review review view` command returns the entire, assembled review structure.
+
+- **Deterministic, stable output**  
+  Consistent formatting, stable ordering, and predictable field names make parsing reliable for agents.
+
+- **Compact, meaningful JSON**  
+  Only essential fields are returned. Low-signal metadata (URLs, hashes, unused fields) is stripped out to reduce token usage.
+
+- **Pre-joined review threads**  
+  Threads come fully reconstructed with inline context — no need for agents to merge comments manually.
+
+- **Server-side filters for token efficiency**  
+  Options like `--unresolved` and `--tail` help reduce payload size and keep inputs affordable for LLMs.
+
+
+> “A good tool definition should define a clear, narrow purpose, return exactly the meaningful context the agent needs, and avoid burdening the model with low-signal intermediate results.”
+
 
 ## Development
 
