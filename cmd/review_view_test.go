@@ -9,7 +9,7 @@ import (
 
 	_ "embed"
 
-    "github.com/agynio/gh-pr-review/internal/ghcli"
+	"github.com/agynio/gh-pr-review/internal/ghcli"
 )
 
 //go:embed testdata/report_response.json

@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-    "github.com/agynio/gh-pr-review/internal/comments"
-    "github.com/agynio/gh-pr-review/internal/resolver"
+	"github.com/agynio/gh-pr-review/internal/comments"
+	"github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 type commentsOptions struct {

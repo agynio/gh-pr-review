@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-    "github.com/agynio/gh-pr-review/internal/resolver"
+	"github.com/agynio/gh-pr-review/internal/resolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

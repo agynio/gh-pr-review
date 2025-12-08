@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-    "github.com/agynio/gh-pr-review/internal/ghcli"
-    "github.com/agynio/gh-pr-review/internal/resolver"
+	"github.com/agynio/gh-pr-review/internal/ghcli"
+	"github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 // Service exposes pull request review thread operations.
