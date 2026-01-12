@@ -273,3 +273,86 @@ Returned by `threads resolve` and `threads unresolve`.
   "additionalProperties": false
 }
 ```
+
+## WatchResult
+
+Returned by `watch`.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WatchResult",
+  "type": "object",
+  "required": ["comments", "timed_out", "watched_ms"],
+  "properties": {
+    "comments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WatchComment"
+      }
+    },
+    "timed_out": {
+      "type": "boolean",
+      "description": "True if the watch ended due to timeout rather than new comments"
+    },
+    "watched_ms": {
+      "type": "integer",
+      "description": "Total watch duration in milliseconds"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "WatchComment": {
+      "type": "object",
+      "required": ["id", "body", "author_login", "created_at", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier (prefixed with 'review-' or 'issue-')"
+        },
+        "node_id": {
+          "type": "string",
+          "description": "GraphQL comment node identifier"
+        },
+        "body": {
+          "type": "string"
+        },
+        "author_login": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "path": {
+          "type": "string",
+          "description": "File path (review comments only)"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Line number (review comments only)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["review", "issue"],
+          "description": "Comment type: 'review' for inline code comments, 'issue' for PR-level comments"
+        },
+        "thread_id": {
+          "type": "string",
+          "description": "GraphQL thread identifier (review comments only)"
+        },
+        "html_url": {
+          "type": "string",
+          "description": "URL to the comment on GitHub"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+```
