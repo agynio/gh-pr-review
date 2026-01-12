@@ -283,7 +283,7 @@ Returned by `watch`.
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "WatchResult",
   "type": "object",
-  "required": ["comments", "timed_out", "watched_ms"],
+  "required": ["comments", "timed_out", "cancelled", "watched_ms"],
   "properties": {
     "comments": {
       "type": "array",
@@ -293,7 +293,11 @@ Returned by `watch`.
     },
     "timed_out": {
       "type": "boolean",
-      "description": "True if the watch ended due to timeout rather than new comments"
+      "description": "True if the watch ended due to timeout"
+    },
+    "cancelled": {
+      "type": "boolean",
+      "description": "True if the watch was cancelled by user interrupt (Ctrl+C)"
     },
     "watched_ms": {
       "type": "integer",

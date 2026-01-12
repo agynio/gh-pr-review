@@ -2,6 +2,7 @@ package watch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,11 +21,12 @@ func NewService(api ghcli.API) *Service {
 }
 
 // WatchOptions configures the watch behavior.
+// All duration fields must be positive; the caller is responsible for validation.
 type WatchOptions struct {
-	Interval      time.Duration // polling interval (default 10s)
-	Debounce      time.Duration // debounce duration (default 5s)
-	Timeout       time.Duration // max watch duration (default 1h)
-	IncludeIssue  bool          // include issue comments (not just review comments)
+	Interval     time.Duration
+	Debounce     time.Duration
+	Timeout      time.Duration
+	IncludeIssue bool
 }
 
 // Comment represents a PR comment (review or issue).
@@ -46,21 +48,12 @@ type Comment struct {
 type WatchResult struct {
 	Comments  []Comment `json:"comments"`
 	TimedOut  bool      `json:"timed_out"`
+	Cancelled bool      `json:"cancelled"`
 	WatchedMs int64     `json:"watched_ms"`
 }
 
 // Watch polls for new comments on a PR and returns when new comments arrive (with debouncing).
 func (s *Service) Watch(ctx context.Context, pr resolver.Identity, opts WatchOptions) (*WatchResult, error) {
-	if opts.Interval <= 0 {
-		opts.Interval = 10 * time.Second
-	}
-	if opts.Debounce <= 0 {
-		opts.Debounce = 5 * time.Second
-	}
-	if opts.Timeout <= 0 {
-		opts.Timeout = time.Hour
-	}
-
 	startTime := time.Now()
 	timeoutCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
@@ -72,9 +65,11 @@ func (s *Service) Watch(ctx context.Context, pr resolver.Identity, opts WatchOpt
 	}
 
 	var (
-		newComments     []Comment
-		debounceTimer   *time.Timer
-		debounceStarted bool
+		newComments        []Comment
+		debounceTimer      *time.Timer
+		debounceCh         <-chan time.Time
+		consecutiveErrors  int
+		maxConsecutiveErrs = 3
 	)
 
 	ticker := time.NewTicker(opts.Interval)
@@ -83,24 +78,37 @@ func (s *Service) Watch(ctx context.Context, pr resolver.Identity, opts WatchOpt
 	for {
 		select {
 		case <-timeoutCtx.Done():
-			if debounceStarted && len(newComments) > 0 {
-				return &WatchResult{
-					Comments:  newComments,
-					TimedOut:  true,
-					WatchedMs: time.Since(startTime).Milliseconds(),
-				}, nil
+			// Stop debounce timer if running
+			if debounceTimer != nil {
+				if !debounceTimer.Stop() {
+					select {
+					case <-debounceTimer.C:
+					default:
+					}
+				}
 			}
+
+			// Distinguish between timeout and user cancellation
+			timedOut := errors.Is(timeoutCtx.Err(), context.DeadlineExceeded)
+			cancelled := errors.Is(ctx.Err(), context.Canceled)
+
 			return &WatchResult{
-				Comments:  nil,
-				TimedOut:  true,
+				Comments:  newComments,
+				TimedOut:  timedOut,
+				Cancelled: cancelled,
 				WatchedMs: time.Since(startTime).Milliseconds(),
 			}, nil
 
 		case <-ticker.C:
 			currentComments, err := s.fetchAllComments(pr, opts.IncludeIssue)
 			if err != nil {
-				continue // ignore transient errors, keep polling
+				consecutiveErrors++
+				if consecutiveErrors >= maxConsecutiveErrs {
+					return nil, fmt.Errorf("polling failed after %d consecutive errors: %w", consecutiveErrors, err)
+				}
+				continue
 			}
+			consecutiveErrors = 0
 
 			for _, c := range currentComments {
 				if _, seen := knownIDs[c.ID]; !seen {
@@ -109,23 +117,24 @@ func (s *Service) Watch(ctx context.Context, pr resolver.Identity, opts WatchOpt
 
 					// Start or reset debounce timer
 					if debounceTimer != nil {
-						debounceTimer.Stop()
+						if !debounceTimer.Stop() {
+							select {
+							case <-debounceTimer.C:
+							default:
+							}
+						}
 					}
 					debounceTimer = time.NewTimer(opts.Debounce)
-					debounceStarted = true
+					debounceCh = debounceTimer.C
 				}
 			}
 
-		case <-func() <-chan time.Time {
-			if debounceTimer != nil {
-				return debounceTimer.C
-			}
-			return nil
-		}():
+		case <-debounceCh:
 			// Debounce timer fired - return collected comments
 			return &WatchResult{
 				Comments:  newComments,
 				TimedOut:  false,
+				Cancelled: false,
 				WatchedMs: time.Since(startTime).Milliseconds(),
 			}, nil
 		}
@@ -148,14 +157,12 @@ func (s *Service) fetchAllCommentIDs(pr resolver.Identity, includeIssue bool) (m
 func (s *Service) fetchAllComments(pr resolver.Identity, includeIssue bool) ([]Comment, error) {
 	var allComments []Comment
 
-	// Fetch review comments via GraphQL
 	reviewComments, err := s.fetchReviewComments(pr)
 	if err != nil {
 		return nil, fmt.Errorf("fetch review comments: %w", err)
 	}
 	allComments = append(allComments, reviewComments...)
 
-	// Optionally fetch issue comments
 	if includeIssue {
 		issueComments, err := s.fetchIssueComments(pr)
 		if err != nil {
@@ -168,10 +175,30 @@ func (s *Service) fetchAllComments(pr resolver.Identity, includeIssue bool) ([]C
 }
 
 func (s *Service) fetchReviewComments(pr resolver.Identity) ([]Comment, error) {
-	const query = `query ReviewComments($owner: String!, $name: String!, $number: Int!) {
+	var allComments []Comment
+	var cursor *string
+
+	for {
+		comments, nextCursor, err := s.fetchReviewCommentsPage(pr, cursor)
+		if err != nil {
+			return nil, err
+		}
+		allComments = append(allComments, comments...)
+
+		if nextCursor == nil {
+			break
+		}
+		cursor = nextCursor
+	}
+
+	return allComments, nil
+}
+
+func (s *Service) fetchReviewCommentsPage(pr resolver.Identity, cursor *string) ([]Comment, *string, error) {
+	const query = `query ReviewComments($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      reviewThreads(first: 100) {
+      reviewThreads(first: 100, after: $cursor) {
         nodes {
           id
           path
@@ -188,6 +215,10 @@ func (s *Service) fetchReviewComments(pr resolver.Identity) ([]Comment, error) {
             }
           }
         }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
       }
     }
   }
@@ -198,15 +229,18 @@ func (s *Service) fetchReviewComments(pr resolver.Identity) ([]Comment, error) {
 		"name":   pr.Repo,
 		"number": pr.Number,
 	}
+	if cursor != nil {
+		variables["cursor"] = *cursor
+	}
 
 	var response struct {
 		Repository *struct {
 			PullRequest *struct {
 				ReviewThreads struct {
 					Nodes []struct {
-						ID       string  `json:"id"`
-						Path     string  `json:"path"`
-						Line     *int    `json:"line"`
+						ID       string `json:"id"`
+						Path     string `json:"path"`
+						Line     *int   `json:"line"`
 						Comments struct {
 							Nodes []struct {
 								ID         string `json:"id"`
@@ -221,17 +255,21 @@ func (s *Service) fetchReviewComments(pr resolver.Identity) ([]Comment, error) {
 							} `json:"nodes"`
 						} `json:"comments"`
 					} `json:"nodes"`
+					PageInfo struct {
+						HasNextPage bool   `json:"hasNextPage"`
+						EndCursor   string `json:"endCursor"`
+					} `json:"pageInfo"`
 				} `json:"reviewThreads"`
 			} `json:"pullRequest"`
 		} `json:"repository"`
 	}
 
 	if err := s.API.GraphQL(query, variables, &response); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if response.Repository == nil || response.Repository.PullRequest == nil {
-		return nil, fmt.Errorf("pull request %d not found on %s/%s", pr.Number, pr.Owner, pr.Repo)
+		return nil, nil, fmt.Errorf("pull request %d not found on %s/%s", pr.Number, pr.Owner, pr.Repo)
 	}
 
 	var comments []Comment
@@ -262,14 +300,40 @@ func (s *Service) fetchReviewComments(pr resolver.Identity) ([]Comment, error) {
 		}
 	}
 
-	return comments, nil
+	var nextCursor *string
+	if response.Repository.PullRequest.ReviewThreads.PageInfo.HasNextPage {
+		c := response.Repository.PullRequest.ReviewThreads.PageInfo.EndCursor
+		nextCursor = &c
+	}
+
+	return comments, nextCursor, nil
 }
 
 func (s *Service) fetchIssueComments(pr resolver.Identity) ([]Comment, error) {
-	const query = `query IssueComments($owner: String!, $name: String!, $number: Int!) {
+	var allComments []Comment
+	var cursor *string
+
+	for {
+		comments, nextCursor, err := s.fetchIssueCommentsPage(pr, cursor)
+		if err != nil {
+			return nil, err
+		}
+		allComments = append(allComments, comments...)
+
+		if nextCursor == nil {
+			break
+		}
+		cursor = nextCursor
+	}
+
+	return allComments, nil
+}
+
+func (s *Service) fetchIssueCommentsPage(pr resolver.Identity, cursor *string) ([]Comment, *string, error) {
+	const query = `query IssueComments($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
-      comments(first: 100) {
+      comments(first: 100, after: $cursor) {
         nodes {
           id
           databaseId
@@ -278,6 +342,10 @@ func (s *Service) fetchIssueComments(pr resolver.Identity) ([]Comment, error) {
           updatedAt
           url
           author { login }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
       }
     }
@@ -288,6 +356,9 @@ func (s *Service) fetchIssueComments(pr resolver.Identity) ([]Comment, error) {
 		"owner":  pr.Owner,
 		"name":   pr.Repo,
 		"number": pr.Number,
+	}
+	if cursor != nil {
+		variables["cursor"] = *cursor
 	}
 
 	var response struct {
@@ -305,17 +376,21 @@ func (s *Service) fetchIssueComments(pr resolver.Identity) ([]Comment, error) {
 							Login string `json:"login"`
 						} `json:"author"`
 					} `json:"nodes"`
+					PageInfo struct {
+						HasNextPage bool   `json:"hasNextPage"`
+						EndCursor   string `json:"endCursor"`
+					} `json:"pageInfo"`
 				} `json:"comments"`
 			} `json:"pullRequest"`
 		} `json:"repository"`
 	}
 
 	if err := s.API.GraphQL(query, variables, &response); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if response.Repository == nil || response.Repository.PullRequest == nil {
-		return nil, fmt.Errorf("pull request %d not found on %s/%s", pr.Number, pr.Owner, pr.Repo)
+		return nil, nil, fmt.Errorf("pull request %d not found on %s/%s", pr.Number, pr.Owner, pr.Repo)
 	}
 
 	var comments []Comment
@@ -337,5 +412,11 @@ func (s *Service) fetchIssueComments(pr resolver.Identity) ([]Comment, error) {
 		})
 	}
 
-	return comments, nil
+	var nextCursor *string
+	if response.Repository.PullRequest.Comments.PageInfo.HasNextPage {
+		c := response.Repository.PullRequest.Comments.PageInfo.EndCursor
+		nextCursor = &c
+	}
+
+	return comments, nextCursor, nil
 }

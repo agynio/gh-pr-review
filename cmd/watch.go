@@ -30,7 +30,7 @@ After the debounce period with no new comments, or when the timeout is reached,
 the command exits and outputs all new comments as JSON.
 
 Exit codes:
-  0  New comments found
+  0  New comments found or user cancelled
   1  Error occurred  
   2  Timed out with no new comments`,
 		Args: cobra.MaximumNArgs(1),
@@ -62,7 +62,24 @@ type watchOptions struct {
 	IncludeIssue bool
 }
 
+func (o *watchOptions) Validate() error {
+	if o.Interval <= 0 {
+		return fmt.Errorf("--interval must be positive, got %d", o.Interval)
+	}
+	if o.Debounce <= 0 {
+		return fmt.Errorf("--debounce must be positive, got %d", o.Debounce)
+	}
+	if o.Timeout <= 0 {
+		return fmt.Errorf("--timeout must be positive, got %d", o.Timeout)
+	}
+	return nil
+}
+
 func runWatch(cmd *cobra.Command, opts *watchOptions) error {
+	if err := opts.Validate(); err != nil {
+		return err
+	}
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
@@ -83,15 +100,19 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 		IncludeIssue: opts.IncludeIssue,
 	}
 
-	// Set up signal handling for graceful exit
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
+	defer signal.Stop(sigCh)
+
 	go func() {
-		<-sigCh
-		cancel()
+		select {
+		case <-sigCh:
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	fmt.Fprintf(os.Stderr, "Watching %s/%s#%d for new comments (interval=%ds, debounce=%ds, timeout=%ds)...\n",
@@ -107,8 +128,8 @@ func runWatch(cmd *cobra.Command, opts *watchOptions) error {
 		return err
 	}
 
-	// Exit with code 2 if timed out with no comments
-	if result.TimedOut && len(result.Comments) == 0 {
+	// Exit with code 2 only if timed out with no comments (not for user cancellation)
+	if result.TimedOut && !result.Cancelled && len(result.Comments) == 0 {
 		os.Exit(2)
 	}
 
