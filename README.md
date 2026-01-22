@@ -86,14 +86,17 @@ The quickest path from opening a pending review to resolving threads:
        {
          "id": "PRR_kwDOAAABbcdEFG12",
          "state": "COMMENTED",
+         "author_login": "octocat",
          "comments": [
            {
              "thread_id": "PRRT_kwDOAAABbcdEFG12",
              "path": "internal/service.go",
+             "author_login": "octocat",
              "body": "nit: prefer helper",
+             "created_at": "2024-05-25T18:21:37Z",
              "is_resolved": false,
              "is_outdated": false,
-             "thread": []
+             "thread_comments": []
            }
          ]
        }
@@ -192,8 +195,12 @@ gh extension upgrade agynio/gh-pr-review
 - Includes all reviewers, review states, and threads by default.
 - Replies are sorted by `created_at` ascending.
 - Output exposes `author_login` only—no user objects or `html_url` fields.
-- Optional fields (`body`, `submitted_at`, `line`, `thread`) are omitted when
-  empty; empty reply lists render as `"thread": []`.
+- Optional fields (`body`, `submitted_at`, `line`) are omitted when empty.
+- `comments` is omitted entirely when a review has no inline comments.
+- `thread_comments` is required for every inline comment and always present
+  (empty arrays indicate no replies).
+
+For the full canonical response structure, see docs/SCHEMAS.md.
 
 ### Filters
 
@@ -220,43 +227,6 @@ gh pr-review review view -R owner/repo --pr 3 --reviewer alice --states CHANGES_
 
 # Drop outdated threads and include comment node IDs
 gh pr-review review view -R owner/repo --pr 3 --not_outdated --include-comment-node-id
-```
-
-### Output schema
-
-```json
-{
-  "reviews": [
-    {
-      "id": "PRR_…",
-      "state": "APPROVED|CHANGES_REQUESTED|COMMENTED|DISMISSED",
-      "author_login": "…",
-      "body": "…",          // omitted if empty
-      "submitted_at": "…",   // omitted if absent
-      "comments": [           // omitted if none
-        {
-          "thread_id": "PRRT_…",
-          "comment_node_id": "PRRC_…",  // omitted unless requested
-          "path": "…",
-          "line": 21,         // omitted if null
-          "author_login": "…",
-          "body": "…",
-          "created_at": "…",
-          "is_resolved": true,
-          "is_outdated": false,
-          "thread": [         // replies only; sorted asc; tail applies
-            {
-              "comment_node_id": "PRRC_…",  // omitted unless requested
-              "author_login": "…",
-              "body": "…",
-              "created_at": "…"
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
 ```
 
 ### Replying to threads
