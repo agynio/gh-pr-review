@@ -199,6 +199,8 @@ gh extension upgrade agynio/gh-pr-review
 - `thread_comments` is required for every inline comment and always present
   (empty arrays indicate no replies).
 
+For the full canonical response structure, see docs/SCHEMAS.md.
+
 ### Filters
 
 | Flag | Purpose |
@@ -224,132 +226,6 @@ gh pr-review review view -R owner/repo --pr 3 --reviewer alice --states CHANGES_
 
 # Drop outdated threads and include comment node IDs
 gh pr-review review view -R owner/repo --pr 3 --not_outdated --include-comment-node-id
-```
-
-### Output schema
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReviewReport",
-  "type": "object",
-  "required": ["reviews"],
-  "properties": {
-    "reviews": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/ReportReview"
-      }
-    }
-  },
-  "additionalProperties": false,
-  "$defs": {
-    "ReportReview": {
-      "type": "object",
-      "required": ["id", "state", "author_login"],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "state": {
-          "type": "string",
-          "enum": ["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"]
-        },
-        "body": {
-          "type": "string"
-        },
-        "submitted_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "author_login": {
-          "type": "string"
-        },
-        "comments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ReportComment"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "ReportComment": {
-      "type": "object",
-      "required": [
-        "thread_id",
-        "path",
-        "author_login",
-        "body",
-        "created_at",
-        "is_resolved",
-        "is_outdated",
-        "thread_comments"
-      ],
-      "properties": {
-        "thread_id": {
-          "type": "string",
-          "description": "GraphQL review thread identifier"
-        },
-        "comment_node_id": {
-          "type": "string",
-          "description": "GraphQL comment node identifier when requested"
-        },
-        "path": {
-          "type": "string"
-        },
-        "line": {
-          "type": ["integer", "null"],
-          "minimum": 1
-        },
-        "author_login": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "is_resolved": {
-          "type": "boolean"
-        },
-        "is_outdated": {
-          "type": "boolean"
-        },
-        "thread_comments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ThreadReply"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "ThreadReply": {
-      "type": "object",
-      "required": ["id", "author_login", "body", "created_at"],
-      "properties": {
-        "comment_node_id": {
-          "type": "string",
-          "description": "GraphQL comment node identifier when requested"
-        },
-        "author_login": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "additionalProperties": false
-    }
-  }
-}
 ```
 
 ### Replying to threads
