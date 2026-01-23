@@ -129,15 +129,16 @@ Example output structure:
         {
           "thread_id": "PRRT_...",
           "path": "src/file.go",
-          "line": 42,
+          "author_login": "reviewer",
           "body": "Consider refactoring this",
+          "created_at": "2024-01-15T10:30:00Z",
           "is_resolved": false,
           "is_outdated": false,
-          "thread": [
+          "thread_comments": [
             {
               "author_login": "author",
               "body": "Good point, will fix",
-              "created_at": "2024-01-15T10:30:00Z"
+              "created_at": "2024-01-15T11:00:00Z"
             }
           ]
         }
