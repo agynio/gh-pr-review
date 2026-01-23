@@ -168,14 +168,14 @@ gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr 
 ### Reply to All Unresolved Comments
 
 1. Get unresolved threads: `gh pr-review threads list --unresolved -R owner/repo <pr>`
-2. For each thread_id, reply: `gh pr-review comments reply <pr> --thread-id <id> --body "..."`
-3. Optionally resolve: `gh pr-review threads resolve <pr> --thread-id <id>`
+2. For each thread_id, reply: `gh pr-review comments reply <pr> -R owner/repo --thread-id <id> --body "..."`
+3. Optionally resolve: `gh pr-review threads resolve <pr> -R owner/repo --thread-id <id>`
 
 ### Create Review with Inline Comments
 
 1. Start: `gh pr-review review --start -R owner/repo <pr>`
-2. Add comments: `gh pr-review review --add-comment --review-id <PRR_...> --path <file> --line <num> --body "..."`
-3. Submit: `gh pr-review review --submit --review-id <PRR_...> --event REQUEST_CHANGES --body "Summary"`
+2. Add comments: `gh pr-review review --add-comment -R owner/repo <pr> --review-id <PRR_...> --path <file> --line <num> --body "..."`
+3. Submit: `gh pr-review review --submit -R owner/repo <pr> --review-id <PRR_...> --event REQUEST_CHANGES --body "Summary"`
 
 ## Important Notes
 
