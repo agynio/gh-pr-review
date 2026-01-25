@@ -24,6 +24,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newCommentsCommand())
 	cmd.AddCommand(newReviewCommand())
 	cmd.AddCommand(newThreadsCommand())
+	cmd.AddCommand(newWatchCommand())
 
 	return cmd
 }

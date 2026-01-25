@@ -208,3 +208,48 @@ gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
 ```
 
 `threads unresolve` emits the same schema with `is_resolved` set to `false`.
+
+## watch (GraphQL only)
+
+- **Purpose:** Monitor a pull request for new comments and exit when they arrive.
+  Useful for automation workflows that need to wait for human feedback.
+- **Inputs:**
+  - Optional pull request selector argument (URL or number with `--repo`).
+  - `-i, --interval`: Polling interval in seconds (default 10).
+  - `--debounce`: Debounce duration in seconds (default 5). After detecting new
+    comments, waits this long for additional comments before returning.
+  - `--timeout`: Maximum watch duration in seconds (default 3600 = 1 hour).
+  - `--issue-comments`: Include issue comments, not just review comments (default true).
+- **Backend:** GitHub GraphQL `reviewThreads` and `comments` queries.
+- **Exit codes:**
+  - `0`: New comments found.
+  - `1`: Error occurred.
+  - `2`: Timed out with no new comments.
+- **Output schema:** [`WatchResult`](SCHEMAS.md#watchresult).
+
+```sh
+gh pr-review watch -R owner/repo 42 --interval 5 --debounce 3
+
+{
+  "comments": [
+    {
+      "id": "review-123456789",
+      "node_id": "PRRC_kwDOAAABbhi7890",
+      "body": "Please add tests for this edge case",
+      "author_login": "reviewer",
+      "created_at": "2025-01-12T10:30:00Z",
+      "path": "internal/service.go",
+      "line": 42,
+      "type": "review",
+      "thread_id": "PRRT_kwDOAAABbFg12345"
+    }
+  ],
+  "timed_out": false,
+  "watched_ms": 15234
+}
+```
+
+The debounce mechanism collects comments that arrive in quick succession. For
+example, if a reviewer posts multiple inline comments within the debounce
+window, all comments are returned together in a single result rather than
+triggering separate exits.
