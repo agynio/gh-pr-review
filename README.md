@@ -21,6 +21,7 @@ Designed for developers, DevOps teams, and AI systems that need **full pull requ
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
 - [Design for LLMs & Automated Agents](#design-for-llms--automated-agents)
+- [Using as a Skill](#using-as-a-skill)
 
 
 
@@ -286,8 +287,57 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
   Options like `--unresolved` and `--tail` help reduce payload size and keep inputs affordable for LLMs.
 
 
-> “A good tool definition should define a clear, narrow purpose, return exactly the meaningful context the agent needs, and avoid burdening the model with low-signal intermediate results.”
+> "A good tool definition should define a clear, narrow purpose, return exactly the meaningful context the agent needs, and avoid burdening the model with low-signal intermediate results."
 
+
+## Using as a Skill
+
+`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's add-skill package](https://github.com/vercel-labs/add-skill).
+
+### Installation as a Skill
+
+To add gh-pr-review as a skill to your AI coding agent:
+
+```sh
+npx @vercel/add-skill https://github.com/agynio/gh-pr-review
+```
+
+This command will:
+- Install the gh-pr-review extension via `gh extension install`
+- Register the skill with your AI agent using the [SKILL.md](SKILL.md) definition
+- Make all gh-pr-review commands available as skill actions
+
+### What the Skill Provides
+
+Once installed, your AI coding agent can:
+
+- **View PR reviews**: Get complete inline comment threads with file context
+- **Reply to comments**: Respond to review feedback programmatically
+- **Resolve threads**: Mark discussions as resolved after addressing feedback
+- **Create reviews**: Start pending reviews and add inline comments
+- **Filter intelligently**: Focus on unresolved, non-outdated comments by specific reviewers
+
+All commands return structured JSON optimized for agent consumption with minimal tokens and maximum context.
+
+### Example Agent Workflow
+
+```
+User: "Show me unresolved comments on PR #42"
+Agent: gh pr-review review view -R owner/repo --pr 42 --unresolved --not_outdated
+Agent: [Parses JSON, summarizes 3 unresolved threads]
+
+User: "Reply to the comment about error handling"
+Agent: gh pr-review comments reply 42 -R owner/repo --thread-id PRRT_... --body "Fixed in commit abc123"
+Agent: gh pr-review threads resolve 42 -R owner/repo --thread-id PRRT_...
+```
+
+### Skill Documentation
+
+See [SKILL.md](SKILL.md) for complete skill documentation including:
+- Core commands reference
+- JSON output schemas
+- Best practices for agents
+- Common workflow patterns
 
 ## Development
 
