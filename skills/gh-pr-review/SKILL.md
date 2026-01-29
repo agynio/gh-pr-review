@@ -189,7 +189,7 @@ gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr 
 
 ## Important Notes
 
-- All IDs use GraphQL format (PRR*... for reviews, PRRT*... for threads)
+- All IDs use GraphQL format (PRR\_... for reviews, PRRT\_... for threads)
 - Commands use pure GraphQL (no REST API fallbacks)
 - Empty arrays `[]` are returned when no data matches filters
 - The `--include-comment-node-id` flag adds PRRC\_... IDs when needed
