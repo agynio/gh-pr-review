@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agynio/gh-pr-review/internal/autodetect"
 	"github.com/agynio/gh-pr-review/internal/resolver"
 	reviewsvc "github.com/agynio/gh-pr-review/internal/review"
 )
@@ -17,7 +18,7 @@ func newReviewCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "review [<number> | <url>]",
-		Short: "Manage pending reviews via GraphQL helpers",
+		Short: "Manage pending reviews (auto-detects current PR if omitted)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -79,6 +80,17 @@ func runReview(cmd *cobra.Command, opts *reviewOptions) error {
 	}
 	if enabled != 1 {
 		return errors.New("specify exactly one of --start, --add-comment, or --submit")
+	}
+
+	// Try auto-detection first
+	autoCtx, _ := autodetect.Detect() // Ignore errors, may not be in repo
+
+	// If no explicit selector/repo, try using auto-detected values
+	if opts.Selector == "" && opts.Pull == 0 && autoCtx.Number > 0 {
+		opts.Pull = autoCtx.Number
+	}
+	if opts.Repo == "" && autoCtx.Owner != "" {
+		opts.Repo = fmt.Sprintf("%s/%s", autoCtx.Owner, autoCtx.Repo)
 	}
 
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)

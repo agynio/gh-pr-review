@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/agynio/gh-pr-review/internal/autodetect"
 	"github.com/agynio/gh-pr-review/internal/comments"
 	"github.com/agynio/gh-pr-review/internal/resolver"
 )
@@ -43,7 +45,7 @@ func newCommentsReplyCommand(parent *commentsOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "reply [<number> | <url>]",
-		Short: "Reply to a pull request review thread",
+		Short: "Reply to a review thread (auto-detects current PR if omitted)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -80,6 +82,17 @@ type commentsReplyOptions struct {
 }
 
 func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
+	// Try auto-detection first
+	autoCtx, _ := autodetect.Detect() // Ignore errors, may not be in repo
+
+	// If no explicit selector/repo, try using auto-detected values
+	if opts.Selector == "" && opts.Pull == 0 && autoCtx.Number > 0 {
+		opts.Pull = autoCtx.Number
+	}
+	if opts.Repo == "" && autoCtx.Owner != "" {
+		opts.Repo = fmt.Sprintf("%s/%s", autoCtx.Owner, autoCtx.Repo)
+	}
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err

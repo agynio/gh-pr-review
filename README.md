@@ -17,6 +17,7 @@ Designed for developers, DevOps teams, and AI systems that need **full pull requ
 **Blog post:** [gh-pr-review: LLM-friendly PR review workflows in your CLI](https://agyn.io/blog/gh-pr-review-cli-agent-workflows) — explains the motivation, design principles, and CLI + JSON output examples.  
 
 - [Quickstart](#quickstart)
+- [Auto-detection](#auto-detection)
 - [Review view](#review-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
@@ -168,6 +169,44 @@ The quickest path from opening a pending review to resolving threads:
      "is_resolved": true
    }
    ```
+
+## Auto-detection
+
+`gh-pr-review` automatically detects the current repository and pull request from your git context, just like the native `gh` CLI.
+
+### How it works
+
+When you run a command without specifying `-R owner/repo` or `--pr <number>`:
+
+1. **Repository detection**: Uses `gh repo view` to detect the current repository from git remotes
+2. **PR detection**: Uses `gh pr view` to detect the PR associated with your current branch
+3. **Fallback**: If auto-detection fails, you can still use explicit flags
+
+### Examples
+
+```sh
+# From within a PR branch - no flags needed
+gh pr-review review view --unresolved
+
+# Equivalent to:
+gh pr-review review view --unresolved -R owner/repo --pr 42
+
+# Explicit flags always override auto-detection
+gh pr-review review view -R other/repo --pr 99
+```
+
+### When auto-detection works
+
+✅ You're in a git repository  
+✅ The repository has a GitHub remote  
+✅ (For PR detection) Your current branch has an associated pull request
+
+### Priority order
+
+1. **Explicit arguments** (highest) - URL or number argument
+2. **Explicit flags** - `-R` and `--pr` flags
+3. **Auto-detection** - Detected from git context
+4. **Error** - If none available
 
 ## Review view
 

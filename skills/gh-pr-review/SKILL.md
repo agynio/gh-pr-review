@@ -33,6 +33,10 @@ First, ensure the extension is installed:
 gh extension install agynio/gh-pr-review
 ```
 
+## Auto-Detection
+
+The extension automatically detects the current repository and PR from your git context (like `gh` CLI does). You can omit `-R owner/repo` and `--pr <number>` when working within a PR branch.
+
 ## Core Commands
 
 ### 1. View All Reviews and Threads
@@ -40,6 +44,10 @@ gh extension install agynio/gh-pr-review
 Get complete review context with inline comments and thread replies:
 
 ```sh
+# Auto-detects current repo and PR
+gh pr-review review view
+
+# Or specify explicitly
 gh pr-review review view -R owner/repo --pr <number>
 ```
 
@@ -152,7 +160,7 @@ Example output structure:
 
 ## Best Practices
 
-1. **Always use `-R owner/repo`** to specify the repository explicitly
+1. **Use auto-detection when possible** - Omit `-R` and `--pr` flags when working in a PR branch
 2. **Use `--unresolved` and `--not_outdated`** to focus on actionable comments
 3. **Save thread_id values** from `review view` output for replying
 4. **Filter by reviewer** when dealing with specific review feedback
@@ -165,7 +173,11 @@ Example output structure:
 ### Get Unresolved Comments for Current PR
 
 ```sh
-gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr view --json number -q .number)
+# With auto-detection (simplest)
+gh pr-review review view --unresolved --not_outdated
+
+# Or explicitly
+gh pr-review review view --unresolved --not_outdated -R owner/repo --pr <number>
 ```
 
 ### Reply to All Unresolved Comments
