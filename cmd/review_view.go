@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/agynio/gh-pr-review/internal/autodetect"
 	"github.com/agynio/gh-pr-review/internal/report"
 	"github.com/agynio/gh-pr-review/internal/resolver"
 )
@@ -18,7 +17,7 @@ func newReviewViewCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "view [<number> | <url>]",
-		Short: "View review summary (auto-detects current PR if omitted)",
+		Short: "View a structured review summary (GraphQL)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -57,16 +56,7 @@ func runReviewView(cmd *cobra.Command, opts *reviewViewOptions) error {
 		return fmt.Errorf("invalid --tail value %d: must be non-negative", opts.TailReplies)
 	}
 
-	// Try auto-detection first
-	autoCtx, _ := autodetect.Detect() // Ignore errors, may not be in repo
-
-	// If no explicit selector/repo, try using auto-detected values
-	if opts.Selector == "" && opts.Pull == 0 && autoCtx.Number > 0 {
-		opts.Pull = autoCtx.Number
-	}
-	if opts.Repo == "" && autoCtx.Owner != "" {
-		opts.Repo = fmt.Sprintf("%s/%s", autoCtx.Owner, autoCtx.Repo)
-	}
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
 
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {

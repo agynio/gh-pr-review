@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/agynio/gh-pr-review/internal/autodetect"
 	"github.com/agynio/gh-pr-review/internal/resolver"
 	"github.com/agynio/gh-pr-review/internal/threads"
 )
@@ -31,7 +29,7 @@ func newThreadsListCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "list [<number> | <url>]",
-		Short: "List review threads (auto-detects current PR if omitted)",
+		Short: "List review threads for a pull request",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -58,16 +56,7 @@ type threadsListOptions struct {
 }
 
 func runThreadsList(cmd *cobra.Command, opts *threadsListOptions) error {
-	// Try auto-detection first
-	autoCtx, _ := autodetect.Detect() // Ignore errors, may not be in repo
-
-	// If no explicit selector/repo, try using auto-detected values
-	if opts.Selector == "" && opts.Pull == 0 && autoCtx.Number > 0 {
-		opts.Pull = autoCtx.Number
-	}
-	if opts.Repo == "" && autoCtx.Owner != "" {
-		opts.Repo = fmt.Sprintf("%s/%s", autoCtx.Owner, autoCtx.Repo)
-	}
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
 
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
@@ -104,10 +93,10 @@ func newThreadsMutationCommand(resolve bool) *cobra.Command {
 	opts := &threadsMutationOptions{}
 
 	use := "resolve"
-	short := "Resolve a review thread (auto-detects current PR if omitted)"
+	short := "Resolve a review thread"
 	if !resolve {
 		use = "unresolve"
-		short = "Reopen a review thread (auto-detects current PR if omitted)"
+		short = "Reopen a review thread"
 	}
 
 	cmd := &cobra.Command{
@@ -158,16 +147,7 @@ func runThreadsUnresolve(cmd *cobra.Command, opts *threadsMutationOptions) error
 }
 
 func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolve bool) error {
-	// Try auto-detection first
-	autoCtx, _ := autodetect.Detect() // Ignore errors, may not be in repo
-
-	// If no explicit selector/repo, try using auto-detected values
-	if opts.Selector == "" && opts.Pull == 0 && autoCtx.Number > 0 {
-		opts.Pull = autoCtx.Number
-	}
-	if opts.Repo == "" && autoCtx.Owner != "" {
-		opts.Repo = fmt.Sprintf("%s/%s", autoCtx.Owner, autoCtx.Repo)
-	}
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
 
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
