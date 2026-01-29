@@ -292,7 +292,7 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 
 ## Using as a Skill
 
-`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's add-skill package](https://github.com/vercel-labs/add-skill).
+`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's skills CLI](https://github.com/vercel-labs/skills).
 
 ### Installation as a Skill
 
