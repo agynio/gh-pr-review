@@ -292,19 +292,19 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 
 ## Using as a Skill
 
-`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's add-skill package](https://github.com/vercel-labs/add-skill).
+`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's skills CLI](https://github.com/vercel-labs/skills).
 
 ### Installation as a Skill
 
 To add gh-pr-review as a skill to your AI coding agent:
 
 ```sh
-npx @vercel/add-skill https://github.com/agynio/gh-pr-review
+npx skills add https://github.com/agynio/gh-pr-review/tree/main/skills/gh-pr-review
 ```
 
 This command will:
 - Install the gh-pr-review extension via `gh extension install`
-- Register the skill with your AI agent using the [SKILL.md](SKILL.md) definition
+- Register the skill with your AI agent using the [SKILL.md](skills/gh-pr-review/SKILL.md) definition
 - Make all gh-pr-review commands available as skill actions
 
 ### What the Skill Provides
@@ -333,7 +333,7 @@ Agent: gh pr-review threads resolve 42 -R owner/repo --thread-id PRRT_...
 
 ### Skill Documentation
 
-See [SKILL.md](SKILL.md) for complete skill documentation including:
+See [SKILL.md](skills/gh-pr-review/SKILL.md) for complete skill documentation including:
 - Core commands reference
 - JSON output schemas
 - Best practices for agents
