@@ -19,6 +19,7 @@ Use this skill when you need to:
 - Filter reviews by state, reviewer, or resolution status
 
 This tool is particularly useful for:
+
 - Automated PR review workflows
 - LLM-based code review agents
 - Terminal-based PR review processes
@@ -43,6 +44,7 @@ gh pr-review review view -R owner/repo --pr <number>
 ```
 
 **Useful filters:**
+
 - `--unresolved` - Only show unresolved threads
 - `--reviewer <login>` - Filter by specific reviewer
 - `--states <APPROVED|CHANGES_REQUESTED|COMMENTED|DISMISSED>` - Filter by review state
@@ -156,6 +158,7 @@ Example output structure:
 4. **Filter by reviewer** when dealing with specific review feedback
 5. **Use `--tail 1`** to reduce output size by keeping only latest replies
 6. **Parse JSON output** instead of trying to scrape text
+7. **ALWAYS get user approval before posting replies** - Never automatically reply to PR comments without explicit user confirmation
 
 ## Common Workflows
 
@@ -167,9 +170,16 @@ gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr 
 
 ### Reply to All Unresolved Comments
 
-1. Get unresolved threads: `gh pr-review threads list --unresolved -R owner/repo <pr>`
-2. For each thread_id, reply: `gh pr-review comments reply <pr> -R owner/repo --thread-id <id> --body "..."`
-3. Optionally resolve: `gh pr-review threads resolve <pr> -R owner/repo --thread-id <id>`
+**IMPORTANT:** Always follow this workflow when addressing PR comments:
+
+1. **Fetch comments:** Get unresolved threads with `gh pr-review review view --unresolved --not_outdated -R owner/repo --pr <number>`
+2. **Make code changes:** Address the review feedback by modifying files
+3. **Show proposed replies:** Present the changes made and draft reply messages to the user
+4. **Wait for approval:** Get explicit user confirmation before posting any replies
+5. **Post replies:** Only after approval, use `gh pr-review comments reply <pr> -R owner/repo --thread-id <id> --body "..."`
+6. **Optionally resolve:** If appropriate, resolve threads with `gh pr-review threads resolve <pr> -R owner/repo --thread-id <id>`
+
+**Never skip step 4** - automated replies without user review can be inappropriate or premature.
 
 ### Create Review with Inline Comments
 
@@ -179,10 +189,10 @@ gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr 
 
 ## Important Notes
 
-- All IDs use GraphQL format (PRR_... for reviews, PRRT_... for threads)
+- All IDs use GraphQL format (PRR*... for reviews, PRRT*... for threads)
 - Commands use pure GraphQL (no REST API fallbacks)
 - Empty arrays `[]` are returned when no data matches filters
-- The `--include-comment-node-id` flag adds PRRC_... IDs when needed
+- The `--include-comment-node-id` flag adds PRRC\_... IDs when needed
 - Thread replies are sorted by created_at ascending
 
 ## Documentation Links
