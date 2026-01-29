@@ -56,6 +56,8 @@ func runReviewView(cmd *cobra.Command, opts *reviewViewOptions) error {
 		return fmt.Errorf("invalid --tail value %d: must be non-negative", opts.TailReplies)
 	}
 
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err

@@ -17,6 +17,7 @@ Designed for developers, DevOps teams, and AI systems that need **full pull requ
 **Blog post:** [gh-pr-review: LLM-friendly PR review workflows in your CLI](https://agyn.io/blog/gh-pr-review-cli-agent-workflows) — explains the motivation, design principles, and CLI + JSON output examples.  
 
 - [Quickstart](#quickstart)
+- [Auto-detection](#auto-detection)
 - [Review view](#review-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
@@ -169,6 +170,44 @@ The quickest path from opening a pending review to resolving threads:
    }
    ```
 
+## Auto-detection
+
+`gh-pr-review` automatically detects the current repository and pull request from your git context, just like the native `gh` CLI.
+
+### How it works
+
+When you run a command without specifying `-R owner/repo` or `--pr <number>`:
+
+1. **Repository detection**: Uses `gh repo view` to detect the current repository from git remotes
+2. **PR detection**: Uses `gh pr view` to detect the PR associated with your current branch
+3. **Fallback**: If auto-detection fails, you can still use explicit flags
+
+### Examples
+
+```sh
+# From within a PR branch - no flags needed
+gh pr-review review view --unresolved
+
+# Equivalent to:
+gh pr-review review view --unresolved -R owner/repo --pr 42
+
+# Explicit flags always override auto-detection
+gh pr-review review view -R other/repo --pr 99
+```
+
+### When auto-detection works
+
+✅ You're in a git repository  
+✅ The repository has a GitHub remote  
+✅ (For PR detection) Your current branch has an associated pull request
+
+### Priority order
+
+1. **Explicit arguments** (highest) - URL or number argument
+2. **Explicit flags** - `-R` and `--pr` flags
+3. **Auto-detection** - Detected from git context
+4. **Error** - If none available
+
 ## Review view
 
 `gh pr-review review view` emits a GraphQL-only snapshot of pull request
@@ -292,19 +331,19 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 
 ## Using as a Skill
 
-`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's add-skill package](https://github.com/vercel-labs/add-skill).
+`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's skills CLI](https://github.com/vercel-labs/skills).
 
 ### Installation as a Skill
 
 To add gh-pr-review as a skill to your AI coding agent:
 
 ```sh
-npx @vercel/add-skill https://github.com/agynio/gh-pr-review
+npx skills add https://github.com/agynio/gh-pr-review/tree/main/skills/gh-pr-review
 ```
 
 This command will:
 - Install the gh-pr-review extension via `gh extension install`
-- Register the skill with your AI agent using the [SKILL.md](SKILL.md) definition
+- Register the skill with your AI agent using the [SKILL.md](skills/gh-pr-review/SKILL.md) definition
 - Make all gh-pr-review commands available as skill actions
 
 ### What the Skill Provides
@@ -333,7 +372,7 @@ Agent: gh pr-review threads resolve 42 -R owner/repo --thread-id PRRT_...
 
 ### Skill Documentation
 
-See [SKILL.md](SKILL.md) for complete skill documentation including:
+See [SKILL.md](skills/gh-pr-review/SKILL.md) for complete skill documentation including:
 - Core commands reference
 - JSON output schemas
 - Best practices for agents

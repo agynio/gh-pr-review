@@ -81,6 +81,8 @@ func runReview(cmd *cobra.Command, opts *reviewOptions) error {
 		return errors.New("specify exactly one of --start, --add-comment, or --submit")
 	}
 
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err

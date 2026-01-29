@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/agynio/gh-pr-review/internal/autodetect"
 )
 
 var (
@@ -73,6 +75,26 @@ func Resolve(selector, repoFlag, host string) (Identity, error) {
 	}
 
 	return Identity{}, fmt.Errorf("invalid pull request selector: %q", selector)
+}
+
+// ResolveWithAutoDetect attempts auto-detection when selector/repo are empty.
+// It uses the provided autodetect.Context to fill in missing values before calling Resolve.
+func ResolveWithAutoDetect(selector, repoFlag, host string, autoCtx *autodetect.Context) (Identity, error) {
+	selector = strings.TrimSpace(selector)
+	repoFlag = strings.TrimSpace(repoFlag)
+
+	// Use auto-detected repo if no explicit repo flag provided
+	if repoFlag == "" && autoCtx != nil && autoCtx.Owner != "" && autoCtx.Repo != "" {
+		repoFlag = fmt.Sprintf("%s/%s", autoCtx.Owner, autoCtx.Repo)
+	}
+
+	// Use auto-detected PR number if no selector provided
+	if selector == "" && autoCtx != nil && autoCtx.Number > 0 {
+		selector = strconv.Itoa(autoCtx.Number)
+	}
+
+	// Now use the standard Resolve function
+	return Resolve(selector, repoFlag, host)
 }
 
 func parsePullURL(raw string) (Identity, error) {

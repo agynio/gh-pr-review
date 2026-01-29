@@ -80,6 +80,8 @@ type commentsReplyOptions struct {
 }
 
 func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err

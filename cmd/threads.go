@@ -56,6 +56,8 @@ type threadsListOptions struct {
 }
 
 func runThreadsList(cmd *cobra.Command, opts *threadsListOptions) error {
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
@@ -145,6 +147,8 @@ func runThreadsUnresolve(cmd *cobra.Command, opts *threadsMutationOptions) error
 }
 
 func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolve bool) error {
+	applyAutoDetection(&opts.Selector, &opts.Repo, &opts.Pull)
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
