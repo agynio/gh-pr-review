@@ -417,3 +417,110 @@ mutation UnresolveThread($threadId: ID!) {
   }
 }
 `
+
+// ThreadComment represents a single comment in a review thread.
+type ThreadComment struct {
+	ID        string    `json:"id"`
+	Body      string    `json:"body"`
+	Author    string    `json:"author"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ThreadWithComments represents a review thread with all comments.
+type ThreadWithComments struct {
+	ThreadID    string          `json:"threadId"`
+	IsResolved  bool            `json:"isResolved"`
+	Path        string          `json:"path"`
+	Line        *int            `json:"line,omitempty"`
+	IsOutdated  bool            `json:"isOutdated"`
+	Comments    []ThreadComment `json:"comments"`
+}
+
+// GetThreadsByID fetches one or more threads (with all comments) by thread ID.
+func (s *Service) GetThreadsByID(threadIDs []string) ([]ThreadWithComments, error) {
+	var result []ThreadWithComments
+	for _, tid := range threadIDs {
+		thread, err := s.fetchThreadWithComments(tid)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *thread)
+	}
+	return result, nil
+}
+
+// fetchThreadWithComments fetches a thread and all its comments (body, author, timestamps, etc.).
+func (s *Service) fetchThreadWithComments(threadID string) (*ThreadWithComments, error) {
+	// GraphQL query for thread details with comments
+	const threadWithCommentsQuery = `
+	query ThreadWithComments($id: ID!) {
+	  node(id: $id) {
+		... on PullRequestReviewThread {
+		  id
+		  isResolved
+		  isOutdated
+		  path
+		  line
+		  comments(first: 100) {
+			nodes {
+			  id
+			  body
+			  author { login }
+			  createdAt
+			  updatedAt
+			}
+		  }
+		}
+	  }
+	}
+	`
+
+	variables := map[string]interface{}{"id": threadID}
+	var resp struct {
+		Node *struct {
+			ID         string `json:"id"`
+			IsResolved bool   `json:"isResolved"`
+			IsOutdated bool   `json:"isOutdated"`
+			Path       string `json:"path"`
+			Line       *int   `json:"line"`
+			Comments   struct {
+				Nodes []struct {
+					ID        string    `json:"id"`
+					Body      string    `json:"body"`
+					Author    *struct { Login string `json:"login"` } `json:"author"`
+					CreatedAt time.Time `json:"createdAt"`
+					UpdatedAt time.Time `json:"updatedAt"`
+				} `json:"nodes"`
+			} `json:"comments"`
+		} `json:"node"`
+	}
+	if err := s.API.GraphQL(threadWithCommentsQuery, variables, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Node == nil {
+		return nil, fmt.Errorf("thread %s not found", threadID)
+	}
+	comments := make([]ThreadComment, 0, len(resp.Node.Comments.Nodes))
+	for _, c := range resp.Node.Comments.Nodes {
+		author := ""
+		if c.Author != nil {
+			author = c.Author.Login
+		}
+		comments = append(comments, ThreadComment{
+			ID:        c.ID,
+			Body:      c.Body,
+			Author:    author,
+			CreatedAt: c.CreatedAt,
+			UpdatedAt: c.UpdatedAt,
+		})
+	}
+	return &ThreadWithComments{
+		ThreadID:   resp.Node.ID,
+		IsResolved: resp.Node.IsResolved,
+		Path:       resp.Node.Path,
+		Line:       resp.Node.Line,
+		IsOutdated: resp.Node.IsOutdated,
+		Comments:   comments,
+	}, nil
+}
