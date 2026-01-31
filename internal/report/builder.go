@@ -152,6 +152,7 @@ func allowedStateSet(states []State) map[State]struct{} {
 			StateChangesRequested: {},
 			StateCommented:        {},
 			StateDismissed:        {},
+			StatePending:          {},
 		}
 	}
 

@@ -10,6 +10,7 @@ const (
 	StateChangesRequested State = "CHANGES_REQUESTED"
 	StateCommented        State = "COMMENTED"
 	StateDismissed        State = "DISMISSED"
+	StatePending          State = "PENDING"
 )
 
 // FilterOptions controls shaping of reviews and threads.

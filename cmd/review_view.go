@@ -98,6 +98,7 @@ func parseStateFilters(raw []string) ([]report.State, bool, error) {
 		"CHANGES_REQUESTED": report.StateChangesRequested,
 		"COMMENTED":         report.StateCommented,
 		"DISMISSED":         report.StateDismissed,
+		"PENDING":           report.StatePending,
 	}
 	allowed := make([]string, 0, len(valid))
 	for key := range valid {
