@@ -190,6 +190,43 @@ gh pr-review threads list --unresolved --mine -R owner/repo 42
 ]
 ```
 
+## threads view (GraphQL only)
+
+- **Purpose:** Show the full conversation and metadata for one or more review threads by thread ID.
+- **Inputs:**
+  - One or more `--thread-id` values (GraphQL review thread node IDs, e.g. `PRRT_…`).
+  - Pull request selector (`-R owner/repo <pr-number>` or PR URL).
+- **Backend:** GitHub GraphQL `reviewThread` query.
+- **Output schema:** Array of [`ThreadDetail`](SCHEMAS.md#threaddetail).
+
+```sh
+gh pr-review threads view PRRT_kwDOAAABbFg12345 PRRT_kwDOAAABbFg67890 -R owner/repo 42
+
+[
+  {
+    "threadId": "PRRT_kwDOAAABbFg12345",
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "internal/service.go",
+    "line": 42,
+    "comments": [
+      {
+        "author_login": "octocat",
+        "body": "nit: prefer helper",
+        "created_at": "2025-12-03T10:00:00Z"
+      },
+      {
+        "author_login": "squirrel289",
+        "body": "Fixed in latest commit.",
+        "created_at": "2025-12-03T11:00:00Z"
+      }
+    ]
+  }
+]
+```
+
+Returns the full thread conversation, including all comments and metadata, for each specified thread ID. Useful for auditing, scripting, or replying to specific threads.
+
 ## threads resolve / threads unresolve (GraphQL only)
 
 - **Purpose:** Resolve or reopen a review thread.
