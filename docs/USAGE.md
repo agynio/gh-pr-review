@@ -57,6 +57,30 @@ gh pr-review review --add-comment \
 }
 ```
 
+## review --edit-comment (GraphQL only)
+
+- **Purpose:** Edit/update the body of a comment in a pending review.
+- **Inputs:**
+  - `--comment-id` **(required):** GraphQL comment node ID (must start with
+    `PRRC_`).
+  - `--body` **(required):** New comment text.
+- **Backend:** GitHub GraphQL `updatePullRequestReviewComment` mutation.
+- **Output schema:** Status payload `{"status": "Comment updated successfully"}`.
+
+```sh
+gh pr-review review --edit-comment \
+  --comment-id PRRC_kwDOAAABbcdEFG12 \
+  --body "Updated: use helper function here" \
+  -R owner/repo 42
+
+{
+  "status": "Comment updated successfully"
+}
+```
+
+> **Note:** This only works on comments in **pending** reviews. Once a review is
+> submitted, comments cannot be edited via this API.
+
 ## review view (GraphQL only)
 
 - **Purpose:** Emit a consolidated snapshot of reviews, inline comments, and

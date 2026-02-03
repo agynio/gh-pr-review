@@ -73,6 +73,20 @@ The quickest path from opening a pending review to resolving threads:
    }
    ```
 
+   **Edit comments before submission (optional).** Use `--edit-comment` with
+   a comment node ID (`PRRC_…`) and new `--body` to update a comment:
+
+   ```sh
+   gh pr-review review --edit-comment \
+     --comment-id PRRC_kwDOAAABbcdEFG12 \
+     --body "Updated: use helper function here" \
+     -R owner/repo 42
+
+   {
+     "status": "Comment updated successfully"
+   }
+   ```
+
 4. **Inspect review threads (GraphQL).** `review view` surfaces pending
    review summaries, thread state, and inline comment metadata. Thread IDs are
    always included; enable `--include-comment-node-id` when you also need the
@@ -248,6 +262,7 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 | --- | --- | --- |
 | `review --start` | GraphQL | Opens a pending review via `addPullRequestReview`. |
 | `review --add-comment` | GraphQL | Requires a `PRR_…` review node ID. |
+| `review --edit-comment` | GraphQL | Updates a comment in a pending review via `updatePullRequestReviewComment`; requires a `PRRC_…` comment node ID and new `--body`. |
 | `review view` | GraphQL | Aggregates reviews, inline comments, and replies (used for thread IDs). |
 | `review --submit` | GraphQL | Finalizes a pending review via `submitPullRequestReview` using the `PRR_…` review node ID (executed through the internal `gh api graphql` wrapper). |
 | `comments reply` | GraphQL | Replies via `addPullRequestReviewThreadReply`; supply `--review-id` when responding from a pending review. |

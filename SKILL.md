@@ -15,6 +15,7 @@ Use this skill when you need to:
 - Reply to review comments programmatically
 - Resolve or unresolve review threads
 - Create and submit PR reviews with inline comments
+- Edit comments in pending reviews
 - Access PR review context for automated workflows
 - Filter reviews by state, reviewer, or resolution status
 
@@ -93,6 +94,15 @@ gh pr-review review --add-comment \
   --path <file-path> \
   --line <line-number> \
   --body "Your comment" \
+  -R owner/repo <pr-number>
+```
+
+Edit a comment in pending review (requires comment node ID PRRC_...):
+
+```sh
+gh pr-review review --edit-comment \
+  --comment-id <PRRC_...> \
+  --body "Updated comment text" \
   -R owner/repo <pr-number>
 ```
 
@@ -175,7 +185,8 @@ gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr 
 
 1. Start: `gh pr-review review --start -R owner/repo <pr>`
 2. Add comments: `gh pr-review review --add-comment -R owner/repo <pr> --review-id <PRR_...> --path <file> --line <num> --body "..."`
-3. Submit: `gh pr-review review --submit -R owner/repo <pr> --review-id <PRR_...> --event REQUEST_CHANGES --body "Summary"`
+3. Edit comments (if needed): `gh pr-review review --edit-comment -R owner/repo <pr> --comment-id <PRRC_...> --body "Updated text"`
+4. Submit: `gh pr-review review --submit -R owner/repo <pr> --review-id <PRR_...> --event REQUEST_CHANGES --body "Summary"`
 
 ## Important Notes
 
