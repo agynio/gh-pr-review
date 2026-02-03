@@ -56,6 +56,12 @@ type SubmitInput struct {
 	Body     string
 }
 
+// UpdateCommentInput contains the payload for updating a comment in a pending review.
+type UpdateCommentInput struct {
+	CommentID string
+	Body      string
+}
+
 // NewService constructs a review Service.
 func NewService(api ghcli.API) *Service {
 	return &Service{API: api}
@@ -230,6 +236,42 @@ func (s *Service) Submit(_ resolver.Identity, input SubmitInput) (*SubmitStatus,
 	}
 
 	return &SubmitStatus{Success: true}, nil
+}
+
+// UpdateComment updates the body of a comment in a pending review.
+func (s *Service) UpdateComment(_ resolver.Identity, input UpdateCommentInput) error {
+	commentID := strings.TrimSpace(input.CommentID)
+	if commentID == "" {
+		return errors.New("comment id is required")
+	}
+	if !strings.HasPrefix(commentID, "PRRC_") {
+		return fmt.Errorf("invalid comment id %q: must be a GraphQL node id (PRRC_...)", input.CommentID)
+	}
+
+	trimmedBody := strings.TrimSpace(input.Body)
+	if trimmedBody == "" {
+		return errors.New("body is required")
+	}
+
+	const mutation = `mutation($input:UpdatePullRequestReviewCommentInput!){
+  updatePullRequestReviewComment(input:$input){
+    pullRequestReviewComment { id }
+  }
+}`
+
+	variables := map[string]interface{}{
+		"input": map[string]interface{}{
+			"id":   commentID,
+			"body": trimmedBody,
+		},
+	}
+
+	var resp struct{}
+	if err := s.API.GraphQL(mutation, variables, &resp); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) currentViewer() (string, error) {
