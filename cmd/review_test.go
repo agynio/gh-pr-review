@@ -222,6 +222,93 @@ func TestReviewSubmitCommandRejectsNonPRRPrefix(t *testing.T) {
 	assert.Contains(t, err.Error(), "GraphQL review node id")
 }
 
+func TestReviewDeleteCommentCommand_GraphQLOnly(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "PRRC_kwDOAAABbcdEFG12", input["id"])
+
+		return assignJSON(result, obj{
+			"data": obj{
+				"deletePullRequestReviewComment": obj{
+					"pullRequestReview": obj{"id": "PRR_review123"},
+				},
+			},
+		})
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{
+		"review", "--delete-comment",
+		"--comment-id", "PRRC_kwDOAAABbcdEFG12",
+		"--repo", "octo/demo", "7",
+	})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "Comment deleted successfully", payload["status"])
+}
+
+func TestReviewDeleteCommentCommandRequiresGraphQLCommentID(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("unexpected graphql invocation")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{
+		"review", "--delete-comment",
+		"--comment-id", "12345",
+		"--repo", "octo/demo", "7",
+	})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GraphQL node id")
+}
+
+func TestReviewDeleteCommentCommandRequiresCommentID(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("unexpected graphql invocation")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{
+		"review", "--delete-comment",
+		"--repo", "octo/demo", "7",
+	})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--comment-id is required")
+}
+
 func TestReviewSubmitCommandAllowsNullReview(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
