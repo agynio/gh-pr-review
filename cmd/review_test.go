@@ -252,6 +252,97 @@ func TestReviewSubmitCommandAllowsNullReview(t *testing.T) {
 	assert.Equal(t, "Review submitted successfully", payload["status"])
 }
 
+func TestReviewEditCommentCommand_GraphQLOnly(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "PRRC_kwDOAAABbcdEFG12", input["pullRequestReviewCommentId"])
+		require.Equal(t, "Updated comment text", input["body"])
+
+		return assignJSON(result, obj{
+			"data": obj{
+				"updatePullRequestReviewComment": obj{
+					"pullRequestReviewComment": obj{"id": "PRRC_kwDOAAABbcdEFG12"},
+				},
+			},
+		})
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{
+		"review", "--edit-comment",
+		"--comment-id", "PRRC_kwDOAAABbcdEFG12",
+		"--body", "Updated comment text",
+		"--repo", "octo/demo", "7",
+	})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "Comment updated successfully", payload["status"])
+}
+
+func TestReviewEditCommentCommandRequiresGraphQLCommentID(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("unexpected graphql invocation")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{
+		"review", "--edit-comment",
+		"--comment-id", "12345",
+		"--body", "Updated text",
+		"--repo", "octo/demo", "7",
+	})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GraphQL node id")
+}
+
+func TestReviewEditCommentCommandRequiresBody(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("unexpected graphql invocation")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{
+		"review", "--edit-comment",
+		"--comment-id", "PRRC_kwDOAAABbcdEFG12",
+		"--repo", "octo/demo", "7",
+	})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--body is required")
+}
+
 func TestReviewSubmitCommandHandlesGraphQLErrors(t *testing.T) {
 	originalFactory := apiClientFactory
 	defer func() { apiClientFactory = originalFactory }()
