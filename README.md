@@ -299,7 +299,17 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 To add gh-pr-review as a skill to your AI coding agent:
 
 ```sh
-npx @vercel/add-skill https://github.com/agynio/gh-pr-review
+npx skills add agynio/gh-pr-review
+```
+
+Additional options:
+
+```sh
+# Install to a specific agent
+npx skills add agynio/gh-pr-review -a claude-code
+
+# Install globally (available across all projects)
+npx skills add agynio/gh-pr-review -g
 ```
 
 This command will:
