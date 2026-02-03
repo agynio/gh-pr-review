@@ -261,8 +261,8 @@ func (s *Service) UpdateComment(_ resolver.Identity, input UpdateCommentInput) e
 
 	variables := map[string]interface{}{
 		"input": map[string]interface{}{
-			"id":   commentID,
-			"body": trimmedBody,
+			"pullRequestReviewCommentId": commentID,
+			"body":                       trimmedBody,
 		},
 	}
 
