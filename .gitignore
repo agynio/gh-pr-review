@@ -2,3 +2,4 @@ dist/
 bin/
 *.log
 .DS_Store
+gh-pr-review
