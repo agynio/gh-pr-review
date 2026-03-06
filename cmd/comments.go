@@ -80,11 +80,13 @@ type commentsReplyOptions struct {
 }
 
 func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
+	inferPR(opts.Selector, &opts.Pull)
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
 	}
 
+	inferRepo(&opts.Repo)
 	hostEnv := os.Getenv("GH_HOST")
 	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
 	if err != nil {
