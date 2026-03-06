@@ -81,11 +81,13 @@ func runReview(cmd *cobra.Command, opts *reviewOptions) error {
 		return errors.New("specify exactly one of --start, --add-comment, or --submit")
 	}
 
+	inferPR(opts.Selector, &opts.Pull)
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
 	}
 
+	inferRepo(&opts.Repo)
 	hostEnv := os.Getenv("GH_HOST")
 	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
 	if err != nil {

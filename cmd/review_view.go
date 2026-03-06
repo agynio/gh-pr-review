@@ -60,6 +60,7 @@ func runReviewView(cmd *cobra.Command, opts *reviewViewOptions) error {
 		return fmt.Errorf("invalid --tail value %d: must be non-negative", opts.TailReplies)
 	}
 
+	inferPR(opts.Selector, &opts.Pull)
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
@@ -70,6 +71,7 @@ func runReviewView(cmd *cobra.Command, opts *reviewViewOptions) error {
 		return err
 	}
 
+	inferRepo(&opts.Repo)
 	identity, err := resolver.Resolve(selector, opts.Repo, os.Getenv("GH_HOST"))
 	if err != nil {
 		return err
