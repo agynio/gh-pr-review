@@ -36,6 +36,8 @@ gh pr-review review --start -R owner/repo 42
   - `--review-id` **(required):** GraphQL review node ID (must start with
     `PRR_`). Numeric IDs are rejected.
   - `--path`, `--line`, `--body` **(required).**
+  - `--body-file`: Read body from a file instead of `--body` (use `"-"` for
+    stdin). Mutually exclusive with `--body`.
   - `--side`, `--start-line`, `--start-side` to describe diff positioning.
 - **Backend:** GitHub GraphQL `addPullRequestReviewThread` mutation.
 - **Output schema:** [`ReviewThread`](SCHEMAS.md#reviewthread) — required fields
@@ -114,6 +116,8 @@ omitted otherwise.
   - `--event` **(required):** One of `COMMENT`, `APPROVE`, `REQUEST_CHANGES`.
   - `--body`: Optional message. GitHub requires a body for
     `REQUEST_CHANGES`.
+  - `--body-file`: Read body from a file instead of `--body` (use `"-"` for
+    stdin). Mutually exclusive with `--body`.
 - **Backend:** GitHub GraphQL `submitPullRequestReview` mutation.
 - **Output schema:** Status payload `{"status": "…"}`. When GraphQL returns
   errors, the command emits `{ "status": "Review submission failed",
@@ -151,7 +155,9 @@ gh pr-review review --submit \
   - `--thread-id` **(required):** GraphQL review thread identifier (`PRRT_…`).
   - `--review-id`: GraphQL review identifier when replying inside your pending
     review (`PRR_…`).
-  - `--body` **(required).**
+  - `--body` **(required,** or use `--body-file`**).**
+  - `--body-file`: Read reply text from a file instead of `--body` (use `"-"`
+    for stdin). Mutually exclusive with `--body`.
 - **Backend:** GitHub GraphQL `addPullRequestReviewThreadReply` mutation.
 - **Output schema:** [`ReplyMinimal`](SCHEMAS.md#replyminimal).
 

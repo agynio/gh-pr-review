@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/agynio/gh-pr-review/internal/ghcli"
@@ -280,4 +282,99 @@ func TestReviewSubmitCommandHandlesGraphQLErrors(t *testing.T) {
 	first, ok := errorsField[0].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "mutation failed", first["message"])
+}
+
+func TestReviewAddCommentCommandWithBodyFile(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	dir := t.TempDir()
+	bodyPath := filepath.Join(dir, "body.txt")
+	require.NoError(t, os.WriteFile(bodyPath, []byte("file note"), 0600))
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		input, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "file note", input["body"])
+
+		payload := map[string]interface{}{
+			"addPullRequestReviewThread": map[string]interface{}{
+				"thread": map[string]interface{}{
+					"id":         "THREAD1",
+					"path":       "scenario.md",
+					"isOutdated": false,
+					"line":       12,
+				},
+			},
+		}
+		return assignJSON(result, payload)
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"review", "--add-comment", "--review-id", "PRR_review", "--path", "scenario.md", "--line", "12", "--body-file", bodyPath, "--repo", "octo/demo", "7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "THREAD1", payload["id"])
+}
+
+func TestReviewSubmitCommandWithBodyFile(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	dir := t.TempDir()
+	bodyPath := filepath.Join(dir, "body.txt")
+	require.NoError(t, os.WriteFile(bodyPath, []byte("Please update"), 0600))
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		payload, ok := variables["input"].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, "Please update", payload["body"])
+
+		return assignJSON(result, obj{
+			"data": obj{
+				"submitPullRequestReview": obj{
+					"pullRequestReview": obj{"id": "PRR_kwM123"},
+				},
+			},
+		})
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"review", "--submit", "--review-id", "PRR_kwM123", "--event", "COMMENT", "--body-file", bodyPath, "--repo", "octo/demo", "7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "Review submitted successfully", payload["status"])
+}
+
+func TestReviewBodyAndBodyFileMutuallyExclusive(t *testing.T) {
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"review", "--add-comment", "--review-id", "PRR_review", "--path", "f.go", "--line", "1", "--body", "text", "--body-file", "file.txt", "--repo", "octo/demo", "7"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "body")
 }
