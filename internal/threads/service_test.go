@@ -412,6 +412,138 @@ func TestUnresolveMutatesThread(t *testing.T) {
 	assert.Equal(t, "T9", res.ThreadNodeID)
 }
 
+// ─── Tests for --commit (reply-then-resolve) ────────────────────────────────
+
+func TestResolveWithCommitPostsReplyThenResolves(t *testing.T) {
+	svc := &Service{}
+	var calls []string
+	var replyBody string
+
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T1",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				}
+				return assign(result, payload)
+			case addThreadReplyMutation:
+				calls = append(calls, "reply")
+				replyBody = variables["body"].(string)
+				return nil
+			case resolveThreadMutation:
+				calls = append(calls, "resolve")
+				payload := map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{
+							"id":         "T1",
+							"isResolved": true,
+						},
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	_, err := svc.Resolve(resolver.Identity{Owner: "o", Repo: "r", Number: 1}, ActionOptions{
+		ThreadID: "T1",
+		Commit:   "abc123",
+	})
+	require.NoError(t, err)
+	// Must call reply BEFORE resolve — order matters
+	require.Equal(t, []string{"reply", "resolve"}, calls)
+	require.Equal(t, "Addressed in `abc123`", replyBody)
+}
+
+func TestResolveWithCommitBailsOnReplyFailure(t *testing.T) {
+	svc := &Service{}
+	resolveCalled := false
+
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T1",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				}
+				return assign(result, payload)
+			case addThreadReplyMutation:
+				return errors.New("reply failed: forbidden")
+			case resolveThreadMutation:
+				resolveCalled = true
+				return nil
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	_, err := svc.Resolve(resolver.Identity{Owner: "o", Repo: "r", Number: 1}, ActionOptions{
+		ThreadID: "T1",
+		Commit:   "abc123",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "post commit reply")
+	require.False(t, resolveCalled, "resolve must NOT be called when reply fails")
+}
+
+func TestResolveWithoutCommitSkipsReply(t *testing.T) {
+	svc := &Service{}
+	var calls []string
+
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				calls = append(calls, "details")
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T1",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				}
+				return assign(result, payload)
+			case resolveThreadMutation:
+				calls = append(calls, "resolve")
+				payload := map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{
+							"id":         "T1",
+							"isResolved": true,
+						},
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query: " + query[:40])
+			}
+		},
+	}
+
+	_, err := svc.Resolve(resolver.Identity{Owner: "o", Repo: "r", Number: 1}, ActionOptions{
+		ThreadID: "T1",
+		Commit:   "", // no commit
+	})
+	require.NoError(t, err)
+	// Should be details → resolve, NO reply call
+	require.Equal(t, []string{"details", "resolve"}, calls)
+}
+
 func assign(dst interface{}, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
