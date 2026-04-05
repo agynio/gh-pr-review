@@ -30,13 +30,21 @@ type ListOptions struct {
 
 // Thread represents a normalized review thread payload for JSON output.
 type Thread struct {
-	ThreadID   string     `json:"threadId"`
-	IsResolved bool       `json:"isResolved"`
-	ResolvedBy *string    `json:"resolvedBy,omitempty"`
-	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
-	Path       string     `json:"path"`
-	Line       *int       `json:"line,omitempty"`
-	IsOutdated bool       `json:"isOutdated"`
+	ThreadID   string          `json:"threadId"`
+	IsResolved bool            `json:"isResolved"`
+	ResolvedBy *string         `json:"resolvedBy,omitempty"`
+	UpdatedAt  *time.Time      `json:"updatedAt,omitempty"`
+	Path       string          `json:"path"`
+	Line       *int            `json:"line,omitempty"`
+	IsOutdated bool            `json:"isOutdated"`
+	Comments   []ThreadComment `json:"comments,omitempty"`
+}
+
+// ThreadComment represents a single comment in a thread for JSON output.
+type ThreadComment struct {
+	Author    string `json:"author"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"createdAt"`
 }
 
 // ActionOptions controls resolve/unresolve operations.
@@ -123,6 +131,20 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error)
 			linePtr = &value
 		}
 
+		// Map comments for output
+		var comments []ThreadComment
+		for _, c := range node.Comments.Nodes {
+			author := ""
+			if c.Author != nil {
+				author = c.Author.Login
+			}
+			comments = append(comments, ThreadComment{
+				Author:    author,
+				Body:      c.Body,
+				CreatedAt: c.UpdatedAt.UTC().Format(time.RFC3339),
+			})
+		}
+
 		allThreads = append(allThreads, Thread{
 			ThreadID:   node.ID,
 			IsResolved: node.IsResolved,
@@ -131,6 +153,7 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error)
 			Path:       node.Path,
 			Line:       linePtr,
 			IsOutdated: node.IsOutdated,
+			Comments:   comments,
 		})
 	}
 
@@ -191,9 +214,10 @@ type threadNode struct {
 	} `json:"resolvedBy"`
 	Comments struct {
 		Nodes []struct {
-			ViewerDidAuthor bool      `json:"viewerDidAuthor"`
-			UpdatedAt       time.Time `json:"updatedAt"`
-			DatabaseID      int64     `json:"databaseId"`
+						ViewerDidAuthor bool      `json:"viewerDidAuthor"`
+						UpdatedAt       time.Time `json:"updatedAt"`
+						DatabaseID      int64     `json:"databaseId"`
+						Body            string    `json:"body"`
 			Author          *struct {
 				Login string `json:"login"`
 			} `json:"author"`
@@ -397,6 +421,7 @@ query Threads($id: ID!, $after: String) {
               databaseId
               viewerDidAuthor
               updatedAt
+              body
               author { login }
             }
           }
