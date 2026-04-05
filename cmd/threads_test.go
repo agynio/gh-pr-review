@@ -305,3 +305,60 @@ func TestThreadsListSinceInvalidTimestamp(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--since")
 }
+
+func TestThreadsListOutputIDs(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "repos/octo/demo":
+			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
+		case "repos/octo/demo/pulls/5":
+			return assignJSON(result, map[string]interface{}{"node_id": "PR_node"})
+		default:
+			return errors.New("unexpected path: " + path)
+		}
+	}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return assignJSON(result, map[string]interface{}{
+			"node": map[string]interface{}{
+				"reviewThreads": map[string]interface{}{
+					"nodes": []map[string]interface{}{
+						{
+							"id": "T_alpha", "isResolved": false, "isOutdated": false, "path": "a.go",
+							"viewerCanResolve": true, "viewerCanUnresolve": false,
+							"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+								{"viewerDidAuthor": false, "updatedAt": "2026-01-01T00:00:00Z", "databaseId": 1},
+							}},
+						},
+						{
+							"id": "T_beta", "isResolved": false, "isOutdated": false, "path": "b.go",
+							"viewerCanResolve": true, "viewerCanUnresolve": false,
+							"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+								{"viewerDidAuthor": false, "updatedAt": "2025-01-01T00:00:00Z", "databaseId": 2},
+							}},
+						},
+					},
+					"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+				},
+			},
+		})
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"threads", "list", "-o", "ids", "--repo", "octo/demo", "5"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	require.Len(t, lines, 2)
+	assert.Equal(t, "T_alpha", lines[0])
+	assert.Equal(t, "T_beta", lines[1])
+}

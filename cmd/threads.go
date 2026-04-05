@@ -48,6 +48,7 @@ func newThreadsListCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.MineOnly, "mine", false, "Show only threads involving or resolvable by the viewer")
 	cmd.Flags().StringVar(&opts.Author, "author", "", "Filter threads to those containing a comment by this author login (case-insensitive)")
 	cmd.Flags().StringVar(&opts.Since, "since", "", "Only include threads updated at or after this RFC3339 timestamp")
+	cmd.Flags().StringVarP(&opts.Output, "output", "o", "", "Output format: 'ids' prints one thread ID per line")
 	cmd.PersistentFlags().StringVarP(&opts.Repo, "repo", "R", "", "Repository in 'owner/repo' format")
 	cmd.PersistentFlags().IntVar(&opts.Pull, "pr", 0, "Pull request number")
 
@@ -62,6 +63,7 @@ type threadsListOptions struct {
 	MineOnly       bool
 	Author         string
 	Since          string
+	Output         string
 }
 
 
@@ -95,6 +97,15 @@ func runThreadsList(cmd *cobra.Command, opts *threadsListOptions) error {
 	payload, err := service.List(identity, listOpts)
 	if err != nil {
 		return err
+	}
+
+	if strings.TrimSpace(opts.Output) == "ids" {
+		ids := make([]string, len(payload))
+		for i, t := range payload {
+			ids[i] = t.ThreadID
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), strings.Join(ids, "\n"))
+		return nil
 	}
 
 	return encodeJSON(cmd, payload)
