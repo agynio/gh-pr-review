@@ -812,3 +812,131 @@ func TestResolveNoReplyBodyWhenNoCommit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, result.ReplyBody)
 }
+
+// ─── Author substring matching tests ─────────────────────────────────────────
+
+func TestServiceListAuthorSubstringMatch(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 9, "PR_sub", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			require.Equal(t, listThreadsQuery, query)
+			ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"reviewThreads": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{
+								"id": "T_rabbit", "isResolved": false, "isOutdated": false, "path": "a.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 1, "body": "nitpick", "author": map[string]interface{}{"login": "coderabbitai"}},
+								}},
+							},
+							{
+								"id": "T_codex", "isResolved": false, "isOutdated": false, "path": "b.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 2, "body": "bug", "author": map[string]interface{}{"login": "chatgpt-codex-connector"}},
+								}},
+							},
+							{
+								"id": "T_human", "isResolved": false, "isOutdated": false, "path": "c.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 3, "body": "looks good", "author": map[string]interface{}{"login": "reviewer42"}},
+								}},
+							},
+						},
+						"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+					},
+				},
+			})
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 9}
+
+	// Substring "codex" should match "chatgpt-codex-connector"
+	t.Run("substring matches partial login", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "codex"})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "T_codex", results[0].ThreadID)
+	})
+
+	// Substring "rabbit" should match "coderabbitai"
+	t.Run("substring matches coderabbitai", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "rabbit"})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "T_rabbit", results[0].ThreadID)
+	})
+
+	// Substring "CODEX" should match case-insensitively
+	t.Run("substring is case insensitive", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "CODEX"})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "T_codex", results[0].ThreadID)
+	})
+
+	// Substring "nobody" should match nothing
+	t.Run("non-matching substring returns empty", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "nobody"})
+		require.NoError(t, err)
+		assert.Len(t, results, 0)
+	})
+
+	// No author filter returns all
+	t.Run("empty author returns all threads", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{})
+		require.NoError(t, err)
+		assert.Len(t, results, 3)
+	})
+}
+
+func TestResolveAllErrorFieldPopulated(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 10, "PR_errfield", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			switch query {
+			case listThreadsQuery:
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "T_ok", "isResolved": false, "isOutdated": false, "path": "x.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 1},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case threadDetailsQuery:
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id": "T_ok", "isResolved": false,
+						"viewerCanResolve": false, "viewerCanUnresolve": false,
+					},
+				})
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 10}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{Unresolved: true})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.False(t, results[0].IsResolved)
+	assert.Contains(t, results[0].Error, "cannot resolve")
+}
