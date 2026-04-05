@@ -58,6 +58,7 @@ type ActionOptions struct {
 type ActionResult struct {
 	ThreadNodeID string `json:"thread_node_id"`
 	IsResolved   bool   `json:"is_resolved"`
+	ReplyBody    string `json:"reply_body,omitempty"`
 }
 
 
@@ -396,12 +397,13 @@ type threadDetails struct {
 }
 
 func (s *Service) performResolve(threadID, commit, owner, repo string) (ActionResult, error) {
+	var replyBody string
 	if commit != "" {
 		commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s", owner, repo, commit)
-		body := fmt.Sprintf("Addressed in [`%s`](%s)", commit, commitURL)
+		replyBody = fmt.Sprintf("Addressed in [`%s`](%s)", commit, commitURL)
 		replyVars := map[string]interface{}{
 			"threadId": threadID,
-			"body":     body,
+			"body":     replyBody,
 		}
 		if err := s.API.GraphQL(addThreadReplyMutation, replyVars, nil); err != nil {
 			return ActionResult{}, fmt.Errorf("post commit reply: %w", err)
@@ -420,7 +422,7 @@ func (s *Service) performResolve(threadID, commit, owner, repo string) (ActionRe
 	if err := s.API.GraphQL(resolveThreadMutation, variables, &resp); err != nil {
 		return ActionResult{}, fmt.Errorf("resolve thread mutation: %w", err)
 	}
-	return ActionResult{ThreadNodeID: resp.Resolve.Thread.ID, IsResolved: resp.Resolve.Thread.IsResolved}, nil
+	return ActionResult{ThreadNodeID: resp.Resolve.Thread.ID, IsResolved: resp.Resolve.Thread.IsResolved, ReplyBody: replyBody}, nil
 }
 
 func (s *Service) performUnresolve(threadID string) (ActionResult, error) {

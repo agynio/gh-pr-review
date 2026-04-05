@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"strings"
 	"time"
 
 	"github.com/agynio/gh-pr-review/internal/resolver"
@@ -716,4 +717,78 @@ func TestServiceListSinceFiltersOldThreads(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, "T_recent", results[0].ThreadID)
+}
+
+func TestResolveIncludesReplyBodyWhenCommitProvided(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		switch {
+		case strings.Contains(query, "ThreadDetails"):
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":                 "T_commit",
+					"isResolved":         false,
+					"viewerCanResolve":   true,
+					"viewerCanUnresolve": false,
+				},
+			})
+		case strings.Contains(query, "addPullRequestReviewThreadReply"):
+			// reply mutation — result is nil, just succeed
+			return nil
+		case strings.Contains(query, "resolveReviewThread"):
+			return assign(result, map[string]interface{}{
+				"resolveReviewThread": map[string]interface{}{
+					"thread": map[string]interface{}{
+						"id":         "T_commit",
+						"isResolved": true,
+					},
+				},
+			})
+		default:
+			return errors.New("unexpected query")
+		}
+	}
+
+	svc := NewService(api)
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 1}
+	result, err := svc.Resolve(identity, ActionOptions{ThreadID: "T_commit", Commit: "abc1234"})
+	require.NoError(t, err)
+	assert.Equal(t, "T_commit", result.ThreadNodeID)
+	assert.True(t, result.IsResolved)
+	assert.Contains(t, result.ReplyBody, "abc1234")
+	assert.Contains(t, result.ReplyBody, "octo/demo/commit/abc1234")
+}
+
+func TestResolveNoReplyBodyWhenNoCommit(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		switch {
+		case strings.Contains(query, "ThreadDetails"):
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":                 "T_no_commit",
+					"isResolved":         false,
+					"viewerCanResolve":   true,
+					"viewerCanUnresolve": false,
+				},
+			})
+		case strings.Contains(query, "resolveReviewThread"):
+			return assign(result, map[string]interface{}{
+				"resolveReviewThread": map[string]interface{}{
+					"thread": map[string]interface{}{
+						"id":         "T_no_commit",
+						"isResolved": true,
+					},
+				},
+			})
+		default:
+			return errors.New("unexpected query")
+		}
+	}
+
+	svc := NewService(api)
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 1}
+	result, err := svc.Resolve(identity, ActionOptions{ThreadID: "T_no_commit"})
+	require.NoError(t, err)
+	assert.Empty(t, result.ReplyBody)
 }
