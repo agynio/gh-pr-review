@@ -460,7 +460,7 @@ func TestResolveWithCommitPostsReplyThenResolves(t *testing.T) {
 	require.NoError(t, err)
 	// Must call reply BEFORE resolve — order matters
 	require.Equal(t, []string{"reply", "resolve"}, calls)
-	require.Equal(t, "Addressed in `abc123`", replyBody)
+	require.Equal(t, "Addressed in [`abc123`](https://github.com/o/r/commit/abc123)", replyBody)
 }
 
 func TestResolveWithCommitBailsOnReplyFailure(t *testing.T) {

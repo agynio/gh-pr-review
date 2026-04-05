@@ -308,7 +308,7 @@ func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, res
 	}
 
 	if resolve {
-		return s.performResolve(threadID, strings.TrimSpace(opts.Commit))
+		return s.performResolve(threadID, strings.TrimSpace(opts.Commit), pr.Owner, pr.Repo)
 	}
 	return s.performUnresolve(threadID)
 }
@@ -334,9 +334,10 @@ type threadDetails struct {
 	ViewerCanUnresolve bool   `json:"viewerCanUnresolve"`
 }
 
-func (s *Service) performResolve(threadID, commit string) (ActionResult, error) {
+func (s *Service) performResolve(threadID, commit, owner, repo string) (ActionResult, error) {
 	if commit != "" {
-		body := fmt.Sprintf("Addressed in `%s`", commit)
+		commitURL := fmt.Sprintf("https://github.com/%s/%s/commit/%s", owner, repo, commit)
+		body := fmt.Sprintf("Addressed in [`%s`](%s)", commit, commitURL)
 		replyVars := map[string]interface{}{
 			"threadId": threadID,
 			"body":     body,
