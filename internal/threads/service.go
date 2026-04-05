@@ -59,6 +59,36 @@ type ActionResult struct {
 	IsResolved   bool   `json:"is_resolved"`
 }
 
+
+// ResolveAllOptions configures bulk resolution.
+type ResolveAllOptions struct {
+	Author     string // only resolve threads started by this author
+	Commit     string // attach commit link to each resolution
+	Unresolved bool   // only resolve currently-unresolved threads (default true)
+}
+
+// ResolveAll resolves all matching threads for the given pull request.
+func (s *Service) ResolveAll(pr resolver.Identity, opts ResolveAllOptions) ([]ActionResult, error) {
+	listOpts := ListOptions{
+		OnlyUnresolved: opts.Unresolved,
+		Author:         opts.Author,
+	}
+	ts, err := s.List(pr, listOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]ActionResult, 0, len(ts))
+	for _, t := range ts {
+		res, err := s.performResolve(t.ThreadID, strings.TrimSpace(opts.Commit), pr.Owner, pr.Repo)
+		if err != nil {
+			results = append(results, ActionResult{ThreadNodeID: t.ThreadID, IsResolved: false})
+			continue
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
 type pullContext struct {
 	identity resolver.Identity
 	nodeID   string

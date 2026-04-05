@@ -228,3 +228,70 @@ func TestThreadsResolveRequiresThreadID(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--thread-id is required")
 }
+
+// ─── F2: resolve-all command test ─────────────────────────────────────────────
+
+func TestThreadsResolveAllCommand(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.restFunc = func(method, path string, params map[string]string, body interface{}, result interface{}) error {
+		switch path {
+		case "repos/octo/demo":
+			return assignJSON(result, map[string]interface{}{"full_name": "octo/demo"})
+		case "repos/octo/demo/pulls/3":
+			return assignJSON(result, map[string]interface{}{"node_id": "PR_bulk"})
+		default:
+			return errors.New("unexpected path: " + path)
+		}
+	}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		switch {
+		case strings.Contains(query, "reviewThreads"):
+			return assignJSON(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"reviewThreads": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{
+								"id": "TBulk1", "isResolved": false, "isOutdated": false, "path": "x.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts.Format(time.RFC3339), "databaseId": 5},
+								}},
+							},
+						},
+						"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+					},
+				},
+			})
+		case strings.Contains(query, "resolveReviewThread"):
+			return assignJSON(result, map[string]interface{}{
+				"resolveReviewThread": map[string]interface{}{
+					"thread": map[string]interface{}{"id": "TBulk1", "isResolved": true},
+				},
+			})
+		default:
+			return errors.New("unexpected query")
+		}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"threads", "resolve-all", "--repo", "octo/demo", "3"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload []map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	require.Len(t, payload, 1)
+	assert.Equal(t, "TBulk1", payload[0]["thread_node_id"])
+	assert.Equal(t, true, payload[0]["is_resolved"])
+}

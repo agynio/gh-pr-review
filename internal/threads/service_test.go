@@ -551,3 +551,124 @@ func assign(dst interface{}, payload interface{}) error {
 	}
 	return json.Unmarshal(data, dst)
 }
+
+
+// ─── F2: ResolveAll tests ─────────────────────────────────────────────────────
+
+func TestResolveAllResolvesUnresolvedThreads(t *testing.T) {
+	svc := &Service{}
+	var resolvedIDs []string
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 7, "PR_bulk", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case listThreadsQuery:
+				ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "TA", "isResolved": false, "isOutdated": false, "path": "a.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 1},
+									}},
+								},
+								{
+									"id": "TB", "isResolved": false, "isOutdated": false, "path": "b.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 2},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case resolveThreadMutation:
+				threadID := variables["threadId"].(string)
+				resolvedIDs = append(resolvedIDs, threadID)
+				return assign(result, map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{"id": threadID, "isResolved": true},
+					},
+				})
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{Unresolved: true})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.ElementsMatch(t, []string{"TA", "TB"}, resolvedIDs)
+	for _, r := range results {
+		assert.True(t, r.IsResolved)
+	}
+}
+
+func TestResolveAllContinuesOnError(t *testing.T) {
+	svc := &Service{}
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 8, "PR_err", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case listThreadsQuery:
+				ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "T_fail", "isResolved": false, "isOutdated": false, "path": "x.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 10},
+									}},
+								},
+								{
+									"id": "T_ok", "isResolved": false, "isOutdated": false, "path": "y.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 11},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case resolveThreadMutation:
+				threadID := variables["threadId"].(string)
+				if threadID == "T_fail" {
+					return errors.New("server error")
+				}
+				return assign(result, map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{"id": threadID, "isResolved": true},
+					},
+				})
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 8}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{Unresolved: true})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	byID := map[string]ActionResult{}
+	for _, r := range results {
+		byID[r.ThreadNodeID] = r
+	}
+	assert.False(t, byID["T_fail"].IsResolved)
+	assert.True(t, byID["T_ok"].IsResolved)
+}

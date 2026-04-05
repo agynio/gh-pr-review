@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -20,6 +23,7 @@ func newThreadsCommand() *cobra.Command {
 	cmd.AddCommand(newThreadsListCommand())
 	cmd.AddCommand(newThreadsResolveCommand())
 	cmd.AddCommand(newThreadsUnresolveCommand())
+	cmd.AddCommand(newThreadsResolveAllCommand())
 
 	return cmd
 }
@@ -176,4 +180,87 @@ func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolv
 		return err
 	}
 	return encodeJSON(cmd, result)
+	return encodeJSON(cmd, result)
+}
+
+
+// newThreadsResolveAllCommand creates the resolve-all subcommand.
+func newThreadsResolveAllCommand() *cobra.Command {
+	opts := &threadsResolveAllOptions{}
+
+	cmd := &cobra.Command{
+		Use:   "resolve-all [<number> | <url>]",
+		Short: "Resolve all matching review threads for a pull request",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				opts.Selector = args[0]
+			}
+			return runThreadsResolveAll(cmd, opts)
+		},
+	}
+
+	cmd.Flags().StringVar(&opts.Author, "author", "", "Only resolve threads by this author")
+	cmd.Flags().StringVar(&opts.Commit, "commit", "", "Attach commit SHA to each resolution reply")
+	cmd.Flags().BoolVar(&opts.Unresolved, "unresolved", true, "Only resolve unresolved threads (default true)")
+	cmd.PersistentFlags().StringVarP(&opts.Repo, "repo", "R", "", "Repository in 'owner/repo' format (required)")
+	cmd.PersistentFlags().IntVar(&opts.Pull, "pr", 0, "Pull request number")
+
+	return cmd
+}
+
+type threadsResolveAllOptions struct {
+	Repo       string
+	Pull       int
+	Selector   string
+	Author     string
+	Commit     string
+	Unresolved bool
+}
+
+func runThreadsResolveAll(cmd *cobra.Command, opts *threadsResolveAllOptions) error {
+	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
+	if err != nil {
+		return err
+	}
+
+	hostEnv := os.Getenv("GH_HOST")
+	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
+	if err != nil {
+		return err
+	}
+
+	commit := strings.TrimSpace(opts.Commit)
+	if commit != "" {
+		commit, err = resolveCommitRef(commit)
+		if err != nil {
+			return fmt.Errorf("--commit: %w", err)
+		}
+	}
+
+	service := threads.NewService(apiClientFactory(identity.Host))
+	results, err := service.ResolveAll(identity, threads.ResolveAllOptions{
+		Author:     strings.TrimSpace(opts.Author),
+		Commit:     commit,
+		Unresolved: opts.Unresolved,
+	})
+	if err != nil {
+		return err
+	}
+	return encodeJSON(cmd, results)
+}
+
+// resolveCommitRef converts symbolic git refs (e.g. HEAD, branch names) to
+// short SHAs. If ref already looks like a hex SHA it is returned unchanged.
+var hexSHARe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+
+func resolveCommitRef(ref string) (string, error) {
+	if hexSHARe.MatchString(ref) {
+		return ref, nil
+	}
+	out, err := exec.Command("git", "rev-parse", "--short", ref).Output()
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve git ref %q: %w", ref, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
