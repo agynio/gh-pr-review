@@ -356,7 +356,7 @@ func (s *Service) performResolve(threadID, commit string) (ActionResult, error) 
 		} `json:"resolveReviewThread"`
 	}
 	if err := s.API.GraphQL(resolveThreadMutation, variables, &resp); err != nil {
-		return ActionResult{}, err
+		return ActionResult{}, fmt.Errorf("resolve thread mutation: %w", err)
 	}
 	return ActionResult{ThreadNodeID: resp.Resolve.Thread.ID, IsResolved: resp.Resolve.Thread.IsResolved}, nil
 }
@@ -372,7 +372,7 @@ func (s *Service) performUnresolve(threadID string) (ActionResult, error) {
 		} `json:"unresolveReviewThread"`
 	}
 	if err := s.API.GraphQL(unresolveThreadMutation, variables, &resp); err != nil {
-		return ActionResult{}, err
+		return ActionResult{}, fmt.Errorf("unresolve thread mutation: %w", err)
 	}
 	return ActionResult{ThreadNodeID: resp.Unresolve.Thread.ID, IsResolved: resp.Unresolve.Thread.IsResolved}, nil
 }
