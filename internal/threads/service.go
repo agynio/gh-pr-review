@@ -183,7 +183,7 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error)
 			comments = append(comments, ThreadComment{
 				Author:    author,
 				Body:      c.Body,
-				CreatedAt: c.UpdatedAt.UTC().Format(time.RFC3339), // GraphQL returns updatedAt; used as best proxy for comment time
+				CreatedAt: c.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
 
@@ -256,10 +256,11 @@ type threadNode struct {
 	} `json:"resolvedBy"`
 	Comments struct {
 		Nodes []struct {
-						ViewerDidAuthor bool      `json:"viewerDidAuthor"`
-						UpdatedAt       time.Time `json:"updatedAt"`
-						DatabaseID      int64     `json:"databaseId"`
-						Body            string    `json:"body"`
+			ViewerDidAuthor bool      `json:"viewerDidAuthor"`
+			CreatedAt       time.Time `json:"createdAt"`
+			UpdatedAt       time.Time `json:"updatedAt"`
+			DatabaseID      int64     `json:"databaseId"`
+			Body            string    `json:"body"`
 			Author          *struct {
 				Login string `json:"login"`
 			} `json:"author"`
@@ -467,6 +468,7 @@ query Threads($id: ID!, $after: String) {
             nodes {
               databaseId
               viewerDidAuthor
+              createdAt
               updatedAt
               body
               author { login }
