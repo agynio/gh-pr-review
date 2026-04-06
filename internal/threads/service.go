@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/agynio/gh-pr-review/internal/ghcli"
+	"github.com/agynio/gh-pr-review/internal/reactions"
 	"github.com/agynio/gh-pr-review/internal/resolver"
 )
 
@@ -578,33 +579,11 @@ mutation AddThreadReply($threadId: ID!, $body: String!) {
   }
 }
 `
-const addReactionMutation = `
-mutation AddReaction($subjectId: ID!, $content: ReactionContent!) {
-  addReaction(input: {subjectId: $subjectId, content: $content}) {
-    reaction {
-      content
-    }
-  }
-}
-`
-
-// ValidReactions maps CLI-friendly reaction names to GitHub GraphQL ReactionContent enum values.
-var ValidReactions = map[string]string{
-	"thumbs_up":   "THUMBS_UP",
-	"thumbs_down": "THUMBS_DOWN",
-	"laugh":       "LAUGH",
-	"hooray":      "HOORAY",
-	"confused":    "CONFUSED",
-	"heart":       "HEART",
-	"rocket":      "ROCKET",
-	"eyes":        "EYES",
-}
+// ValidReactions delegates to the reactions package for backward compatibility.
+var ValidReactions = reactions.ValidReactions
 
 // React adds a reaction to a comment identified by its node ID.
+// Delegates to the reactions package.
 func (s *Service) React(commentID, reaction string) error {
-	variables := map[string]interface{}{
-		"subjectId": commentID,
-		"content":   reaction,
-	}
-	return s.API.GraphQL(addReactionMutation, variables, nil)
+	return reactions.ReactRaw(s.API, commentID, reaction)
 }

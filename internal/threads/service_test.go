@@ -940,3 +940,51 @@ func TestResolveAllErrorFieldPopulated(t *testing.T) {
 	assert.False(t, results[0].IsResolved)
 	assert.Contains(t, results[0].Error, "cannot resolve")
 }
+func TestResolveWithReactSkipsReactionWhenNoComments(t *testing.T) {
+	svc := &Service{}
+	resolveCalled := false
+	reactCalled := false
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch {
+			case query == threadDetailsQuery:
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T_empty",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+						"comments": map[string]interface{}{
+							"nodes": []map[string]interface{}{},
+						},
+					},
+				})
+			case query == resolveThreadMutation:
+				resolveCalled = true
+				return assign(result, map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{
+							"id":         "T_empty",
+							"isResolved": true,
+						},
+					},
+				})
+			case strings.Contains(query, "addReaction"):
+				reactCalled = true
+				return nil
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	result, err := svc.Resolve(resolver.Identity{Host: "github.com"}, ActionOptions{
+		ThreadID: "T_empty",
+		React:    "THUMBS_UP",
+	})
+	require.NoError(t, err)
+	assert.True(t, resolveCalled, "resolve mutation should be called")
+	assert.False(t, reactCalled, "reaction should NOT be called when thread has no comments")
+	assert.True(t, result.IsResolved)
+}
+

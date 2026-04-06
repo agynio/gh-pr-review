@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agynio/gh-pr-review/internal/reactions"
 	"github.com/agynio/gh-pr-review/internal/resolver"
 	"github.com/agynio/gh-pr-review/internal/threads"
 )
@@ -176,7 +177,7 @@ func (o *threadsMutationOptions) Validate() error {
 		return errors.New("--thread-id is required")
 	}
 	if o.React != "" {
-		if _, ok := threads.ValidReactions[o.React]; !ok {
+		if _, ok := reactions.ValidReactions[o.React]; !ok {
 			return fmt.Errorf("--react: invalid reaction %q; valid values: thumbs_up, thumbs_down, laugh, hooray, confused, heart, rocket, eyes", o.React)
 		}
 	}
@@ -218,7 +219,7 @@ func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolv
 	}
 	var reaction string
 	if opts.React != "" {
-		reaction = threads.ValidReactions[opts.React]
+		reaction = reactions.ValidReactions[opts.React]
 	}
 	action := threads.ActionOptions{
 		ThreadID: strings.TrimSpace(opts.ThreadID),
@@ -282,7 +283,7 @@ func runThreadsResolveAll(cmd *cobra.Command, opts *threadsResolveAllOptions) er
 	}
 
 	if opts.React != "" {
-		if _, ok := threads.ValidReactions[opts.React]; !ok {
+		if _, ok := reactions.ValidReactions[opts.React]; !ok {
 			return fmt.Errorf("--react: invalid reaction %q; valid values: thumbs_up, thumbs_down, laugh, hooray, confused, heart, rocket, eyes", opts.React)
 		}
 	}
@@ -310,7 +311,7 @@ func runThreadsResolveAll(cmd *cobra.Command, opts *threadsResolveAllOptions) er
 
 	var reaction string
 	if opts.React != "" {
-		reaction = threads.ValidReactions[opts.React]
+		reaction = reactions.ValidReactions[opts.React]
 	}
 
 	service := threads.NewService(apiClientFactory(identity.Host))

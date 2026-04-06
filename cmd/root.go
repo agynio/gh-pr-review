@@ -25,6 +25,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(newReviewCommand())
 	cmd.AddCommand(newThreadsCommand())
 
+	cmd.AddCommand(newReactCommand())
 	return cmd
 }
 
