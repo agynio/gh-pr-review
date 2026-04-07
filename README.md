@@ -42,10 +42,15 @@ The quickest path from opening a pending review to resolving threads:
 
 
 2. **Start a pending review (GraphQL).** Capture the returned `id` (GraphQL
-   node).
+   node). When run inside a git repository, `-R owner/repo` and the PR number
+   are inferred automatically from the git remote and current branch.
 
    ```sh
+   # Explicit (works anywhere)
    gh pr-review review --start -R owner/repo 42
+
+   # Inferred (inside a repo, on a branch with an open PR)
+   gh pr-review review --start
 
    {
      "id": "PRR_kwDOAAABbcdEFG12",
@@ -214,10 +219,15 @@ The quickest path from opening a pending review to resolving threads:
 discussion. The response groups reviews → parent inline comments → thread
 replies, omitting optional fields entirely instead of returning `null`.
 
-Run it with either a combined selector or explicit flags:
+Run it with either a combined selector or explicit flags. When inside a git
+repository, `-R` and `--pr` are inferred automatically:
 
 ```sh
+# Explicit
 gh pr-review review view -R owner/repo --pr 3
+
+# Inferred (inside the repo, on a branch with an open PR)
+gh pr-review review view
 ```
 
 Install or upgrade to **v1.6.0 or newer** (GraphQL-only thread resolution and minimal comment replies):
@@ -378,13 +388,13 @@ All commands return structured JSON optimized for agent consumption with minimal
 ### Example Agent Workflow
 
 ```
-User: "Show me unresolved comments on PR #42"
-Agent: gh pr-review review view -R owner/repo --pr 42 --unresolved --not_outdated
+User: "Show me unresolved comments on this PR"
+Agent: gh pr-review review view --unresolved --not_outdated
 Agent: [Parses JSON, summarizes 3 unresolved threads]
 
 User: "Reply to the comment about error handling"
-Agent: gh pr-review comments reply 42 -R owner/repo --thread-id PRRT_... --body "Fixed in commit abc123"
-Agent: gh pr-review threads resolve 42 -R owner/repo --thread-id PRRT_...
+Agent: gh pr-review comments reply --thread-id PRRT_... --body "Fixed in commit abc123"
+Agent: gh pr-review threads resolve --thread-id PRRT_...
 ```
 
 ### Skill Documentation
