@@ -21,6 +21,8 @@ type FilterOptions struct {
 	RequireNotOutdated   bool
 	TailReplies          int
 	IncludeCommentNodeID bool
+	Author               string
+	IncludeResolved      bool
 }
 
 // Review models a pull request review fetched from GraphQL.
