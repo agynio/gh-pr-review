@@ -21,6 +21,7 @@ func newRootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 
+	cmd.AddCommand(newAwaitCommand())
 	cmd.AddCommand(newCommentsCommand())
 	cmd.AddCommand(newReviewCommand())
 	cmd.AddCommand(newThreadsCommand())
