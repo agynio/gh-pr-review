@@ -13,6 +13,8 @@ With `gh-pr-review`, you can:
 - Export structured output ideal for **LLMs and automated PR review agents**
 
 Designed for developers, DevOps teams, and AI systems that need **full pull request review context**, not just top-level comments.
+
+**Blog post:** [gh-pr-review: LLM-friendly PR review workflows in your CLI](https://agyn.io/blog/gh-pr-review-cli-agent-workflows)
   
 
 - [Quickstart](#quickstart)
