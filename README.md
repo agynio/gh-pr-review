@@ -1,409 +1,115 @@
 # gh-pr-review
 
-`gh-pr-review` is a GitHub CLI extension that adds **inline PR review comments** and **thread inspection** to the terminal. This is a fork of [agynio/gh-pr-review](https://github.com/agynio/gh-pr-review) with additional features.  
+A GitHub CLI extension for inline PR review comments and thread inspection in the terminal.
 
-GitHub’s built-in `gh` tool does *not* show inline comments, review threads, or thread grouping — but this extension does.
-
-With `gh-pr-review`, you can:
-
-- View complete **inline review threads** with file and line context  
-- See **unresolved comments** during code review  
-- Reply to inline comments directly from the terminal  
-- Resolve review threads programmatically  
-- Group and inspect threads with the `threads view` subcommand  
-- Export structured output ideal for **LLMs and automated PR review agents**
-
-Designed for developers, DevOps teams, and AI systems that need **full pull request review context**, not just top-level comments.
+This fork of [agynio/gh-pr-review](https://github.com/agynio/gh-pr-review) adds features for developers, DevOps teams, and AI systems that need complete pull request review context.
 
 **Blog post:** [gh-pr-review: LLM-friendly PR review workflows in your CLI](https://agyn.io/blog/gh-pr-review-cli-agent-workflows)
-  
 
-- [Quickstart](#quickstart)
-- [Review view](#review-view)
-- [Threads view](#threads-view)
-- [Backend policy](#backend-policy)
-- [Additional docs](#additional-docs)
-- [Design for LLMs & Automated Agents](#design-for-llms--automated-agents)
-- [Using as a Skill](#using-as-a-skill)
+## Features
 
+GitHub's built-in `gh` tool does not show inline comments, review threads, or thread grouping. This extension adds:
 
+- View inline review threads with file context
+- Reply to comments from the terminal
+- Resolve threads programmatically
+- Group and inspect threads with `threads view`
+- Export structured JSON for LLMs and automation
 
-
-## Quickstart
-
-The quickest path from opening a pending review to resolving threads:
-
-1. **Install or upgrade the extension.**
-
-   ```sh
-   gh extension install v2nic/gh-pr-review
-   # Update an existing installation
-   gh extension upgrade v2nic/gh-pr-review
-   ```
-
-
-2. **Start a pending review.** Capture the returned `id`. When run inside a git repository, `-R owner/repo` and the PR number
-   are inferred automatically from the git remote and current branch.
-
-   ```sh
-   # Explicit (works anywhere)
-   gh pr-review review --start -R owner/repo 42
-
-   # Inferred (inside a repo, on a branch with an open PR)
-   gh pr-review review --start
-
-   {
-     "id": "PRR_kwDOAAABbcdEFG12",
-     "state": "PENDING"
-   }
-   ```
-
-   Pending reviews omit `submitted_at`; the field appears after submission.
-
-3. **Add inline comments with the pending review ID.** The `review
-   --add-comment` command requires a `PRR_…` review node ID.
-
-   ```sh
-   gh pr-review review --add-comment \
-     --review-id PRR_kwDOAAABbcdEFG12 \
-     --path internal/service.go \
-     --line 42 \
-     --body "nit: use helper" \
-     -R owner/repo 42
-   ```
-
-   You can also read the body from a file with `--body-file`:
-
-   ```sh
-   gh pr-review review --add-comment \
-     --review-id PRR_kwDOAAABbcdEFG12 \
-     --path internal/service.go \
-     --line 42 \
-     --body-file comment.md \
-     -R owner/repo 42
-   ```
-
-   Or pipe content directly from stdin:
-
-   ```sh
-   echo "nit: use helper" | gh pr-review review --add-comment \
-     --review-id PRR_kwDOAAABbcdEFG12 \
-     --path internal/service.go \
-     --line 42 \
-     --body-file - \
-     -R owner/repo 42
-   ```
-
-   {
-     "id": "PRRT_kwDOAAABbcdEFG12",
-     "path": "internal/service.go",
-     "is_outdated": false,
-     "line": 42
-   }```
-
-   **Edit comments before submission (optional).** Use `--edit-comment` with
-   a comment node ID (`PRRC_…`) and new `--body` to update a comment:
-
-   ```sh
-   gh pr-review review --edit-comment \
-     --comment-id PRRC_kwDOAAABbcdEFG12 \
-     --body "Updated: use helper function here" \
-     -R owner/repo 42
-
-   {
-     "status": "Comment updated successfully"
-   }
-   ```
-
-4. **Inspect review threads.** `review view` surfaces pending review
-   summaries, thread state, and inline comment metadata. Thread IDs are
-   always included; enable `--include-comment-node-id` when you also need the
-   individual comment node identifiers.
-
-   ```sh
-   gh pr-review review view --reviewer octocat -R owner/repo 42
-
-   {
-     "reviews": [
-       {
-         "id": "PRR_kwDOAAABbcdEFG12",
-         "state": "COMMENTED",
-         "author_login": "octocat",
-         "comments": [
-           {
-             "thread_id": "PRRT_kwDOAAABbcdEFG12",
-             "path": "internal/service.go",
-             "author_login": "octocat",
-             "body": "nit: prefer helper",
-             "created_at": "2024-05-25T18:21:37Z",
-             "is_resolved": false,
-             "is_outdated": false,
-             "thread_comments": []
-           }
-         ]
-       }
-     ]
-   }
-   ```
-
-   Use the `thread_id` values with `comments reply` to continue discussions. If
-   you are replying inside your own pending review, pass the associated
-   `PRR_…` identifier with `--review-id`.
-
-   ```sh
-   gh pr-review comments reply \
-     --thread-id PRRT_kwDOAAABbcdEFG12 \
-     --body "Follow-up addressed in commit abc123" \
-     -R owner/repo 42
-   ```
-
-5. **Submit the review.** Reuse the pending review `PRR_…` identifier when
-   finalizing. Successful submissions emit a status-only payload.
-
-   ```sh
-   gh pr-review review --submit \
-     --review-id PRR_kwDOAAABbcdEFG12 \
-     --event REQUEST_CHANGES \
-     --body "Please add tests" \
-     -R owner/repo 42
-
-   {
-     "status": "Review submitted successfully"
-   }
-   ```
-
-   On errors, the command exits non-zero after emitting:
-
-   ```json
-   {
-     "status": "Review submission failed",
-     "errors": [
-       { "message": "mutation failed", "path": ["mutation", "submitPullRequestReview"] }
-     ]
-   }
-   ```
-
-6. **Inspect and resolve threads.** Array responses are always `[]` when no
-   threads match.
-
-   ```sh
-   gh pr-review threads list --unresolved --mine -R owner/repo 42
-
-   [
-     {
-       "threadId": "R_ywDoABC123",
-       "isResolved": false,
-       "path": "internal/service.go",
-       "line": 42,
-       "isOutdated": false
-     }
-   ]
-   ```
-
-   ```sh
-   gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
-   
-   {
-     "thread_node_id": "R_ywDoABC123",
-     "is_resolved": true
-   }
-   ```
-
-## Review view
-
-`gh pr-review review view` emits a snapshot of pull request discussion. The response groups reviews → parent inline comments → thread
-replies, omitting optional fields entirely instead of returning `null`.
-
-Run it with either a combined selector or explicit flags. When inside a git
-repository, `-R` and `--pr` are inferred automatically:
-
-```sh
-# Explicit
-gh pr-review review view -R owner/repo --pr 3
-
-# Inferred (inside the repo, on a branch with an open PR)
-gh pr-review review view
-```
-
-Install or upgrade the extension:
+## Installation
 
 ```sh
 gh extension install v2nic/gh-pr-review
-# Update an existing installation
-gh extension upgrade v2nic/gh-pr-review
+gh extension upgrade v2nic/gh-pr-review  # Update existing installation
 ```
 
-### Command behavior
+### Agent Skill
 
-- Single operation per invocation.
-- Includes all reviewers, review states, and threads by default.
-- Replies are sorted by `created_at` ascending.
-- Output exposes `author_login` only—no user objects or `html_url` fields.
-- Optional fields (`body`, `submitted_at`, `line`) are omitted when empty.
-- `comments` is omitted entirely when a review has no inline comments.
-- `thread_comments` is required for every inline comment and always present
-  (empty arrays indicate no replies).
+Register with your AI agent using the [SKILL.md](skills/gh-pr-review/SKILL.md) definition:
 
-For the full canonical response structure, see docs/SCHEMAS.md.
+```bash
+npx skills add v2nic/gh-pr-review
+```
+
+## Commands
+
+| Command                         | Description                                           |
+| ------------------------------- | ----------------------------------------------------- |
+| `review --start`                | Opens a pending review                                |
+| `review --add-comment`          | Adds inline comment (requires `PRR_…` review node ID) |
+| `review --edit-comment`         | Updates a comment in a pending review                 |
+| `review view`                   | Aggregates reviews, inline comments, and replies      |
+| `review --submit`               | Finalizes a pending review                            |
+| `comments reply`                | Replies to a review thread                            |
+| `threads list`                  | Lists review threads for the pull request             |
+| `threads resolve` / `unresolve` | Resolves or unresolves review threads                 |
 
 ### Filters
 
-| Flag | Purpose |
-| --- | --- |
-| `--reviewer <login>` | Only include reviews authored by `<login>` (case-insensitive). |
-| `--states <list>` | Comma-separated review states (`APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED`). |
-| `--unresolved` | Keep only unresolved threads. |
-| `--not_outdated` | Exclude threads marked as outdated. |
-| `--tail <n>` | Retain only the last `n` replies per thread (0 = all). The parent inline comment is always kept; only replies are trimmed. |
-| `--include-comment-node-id` | Add comment node identifiers to parent comments and replies. |
+| Flag                        | Purpose                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `--reviewer <login>`        | Only include reviews by specified user (case-insensitive)                         |
+| `--states <list>`           | Comma-separated states: `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED` |
+| `--unresolved`              | Keep only unresolved threads                                                      |
+| `--not_outdated`            | Exclude threads marked as outdated                                                |
+| `--tail <n>`                | Retain only last `n` replies per thread (0 = all)                                 |
+| `--include-comment-node-id` | Add comment node identifiers to parent comments and replies                       |
 
-Commands that accept `--body` also support `--body-file <path>` to read body
-text from a file. Use `--body-file -` to read from stdin. The two flags are
-mutually exclusive.
+**Note**: Commands accepting `--body` also support `--body-file <path>` to read from a file. Use `--body-file -` to read from stdin. These flags are mutually exclusive.
 
-### Examples
+See [skills/references/USAGE.md](skills/references/USAGE.md) for detailed usage. See [docs/SCHEMAS.md](docs/SCHEMAS.md) for JSON response schemas.
+
+## Usage
+
+Basic workflow:
+
+1. Start a review: `gh pr-review review --start`
+2. Add comments: `gh pr-review review --add-comment --review-id <ID> --path <file> --line <N> --body "<msg>"`
+3. Submit review: `gh pr-review review --submit --review-id <ID> --event APPROVE`
+4. Resolve threads: `gh pr-review threads resolve --thread-id <ID>`
+
+When inside a git repository, `-R owner/repo` and PR number are inferred automatically.
+
+### Viewing Reviews
+
+`gh pr-review review view` shows all reviews, inline comments, and replies:
 
 ```sh
-# Default: return all reviews, states, threads
 gh pr-review review view -R owner/repo --pr 3
-
-# Unresolved threads only
-gh pr-review review view -R owner/repo --pr 3 --unresolved
-
-# Focus changes requested from a single reviewer; keep only latest reply per thread
-gh pr-review review view -R owner/repo --pr 3 --reviewer alice --states CHANGES_REQUESTED --tail 1
-
-# Drop outdated threads and include comment node IDs
-gh pr-review review view -R owner/repo --pr 3 --not_outdated --include-comment-node-id
 ```
 
-### Replying to threads
+Common filters:
+- `--unresolved` — Show only unresolved threads
+- `--reviewer <user>` — Filter by reviewer
+- `--states APPROVED,CHANGES_REQUESTED` — Filter by review state
 
-Use the `thread_id` values surfaced in the report when replying.
+Reply to threads using the `thread_id` from the view output:
 
 ```sh
-gh pr-review comments reply 3 -R owner/repo \
-  --thread-id PRRT_kwDOAAABbcdEFG12 \
-  --body "Follow-up addressed in commit abc123"
-
+gh pr-review comments reply --thread-id <ID> --body "<msg>"
 ```
 
-## Threads view
+### Managing Threads
 
-`gh pr-review threads view` provides a grouped, high-level summary of all review threads in a pull request, including their resolution status, file/line context, and reply grouping. This is useful for quickly auditing unresolved feedback, grouping threads by file, or summarizing review activity for LLMs and automation.
-
-**Example:**
+List and resolve threads:
 
 ```sh
-gh pr-review threads view PRRT_XXXXXXX [PRRT_XXXXXXX...]
+# List unresolved threads
+gh pr-review threads list --unresolved
+
+# Resolve a thread
+gh pr-review threads resolve --thread-id <ID>
 ```
 
-See [skills/references/USAGE.md](skills/references/USAGE.md) for full details.
-
-## Backend policy
-
-| Command | Description |
-| --- | --- |
-| `review --start` | Opens a pending review |
-| `review --add-comment` | Requires a `PRR_…` review node ID |
-| `review --edit-comment` | Updates a comment in a pending review |
-| `review view` | Aggregates reviews, inline comments, and replies |
-| `review --submit` | Finalizes a pending review |
-| `comments reply` | Replies to a review thread |
-| `threads list` | Lists review threads for the pull request |
-| `threads resolve` / `unresolve` | Resolves or unresolves review threads |
-
-
-## Additional docs
-
-- [skills/references/USAGE.md](skills/references/USAGE.md) — Command reference
-- [docs/SCHEMAS.md](docs/SCHEMAS.md) — JSON schemas for each structured response.
-- [skills/gh-pr-review/SKILL.md](skills/gh-pr-review/SKILL.md) — Agent-focused workflows and best practices.
-
-## Design for LLMs & Automated Agents
-
-`gh-pr-review` is designed to give LLMs and agents the **exact PR review context they need** — without the noisy, multi-step GitHub API workflow.
-
-### Why it's LLM-friendly
-
-- **Replaces multi-call API chains with one command**  
-  Instead of calling `list reviews → list thread comments → list comments`,  
-  a single `gh pr-review review view` command returns the entire, assembled review structure.
-
-- **Deterministic, stable output**  
-  Consistent formatting, stable ordering, and predictable field names make parsing reliable for agents.
-
-- **Compact, meaningful JSON**  
-  Only essential fields are returned. Low-signal metadata (URLs, hashes, unused fields) is stripped out to reduce token usage.
-
-- **Pre-joined review threads**  
-  Threads come fully reconstructed with inline context — no need for agents to merge comments manually.
-
-- **Server-side filters for token efficiency**  
-  Options like `--unresolved` and `--tail` help reduce payload size and keep inputs affordable for LLMs.
-
-
-> "A good tool definition should define a clear, narrow purpose, return exactly the meaningful context the agent needs, and avoid burdening the model with low-signal intermediate results."
-
-
-## Using as a Skill
-
-`gh-pr-review` can be used as a reusable skill for AI coding agents via [Vercel's add-skill package](https://github.com/vercel-labs/add-skill).
-
-### Installation as a Skill
-
-To add gh-pr-review as a skill to your AI coding agent:
-
-```sh
-npx @vercel/add-skill https://github.com/v2nic/gh-pr-review
-```
-
-This command will:
-- Install the gh-pr-review extension via `gh extension install`
-- Register the skill with your AI agent using the [SKILL.md](skills/gh-pr-review/SKILL.md) definition
-- Make all gh-pr-review commands available as skill actions
-
-### What the Skill Provides
-
-Once installed, your AI coding agent can:
-
-- **View PR reviews**: Get complete inline comment threads with file context
-- **Reply to comments**: Respond to review feedback programmatically
-- **Resolve threads**: Mark discussions as resolved after addressing feedback
-- **Create reviews**: Start pending reviews and add inline comments
-- **Filter intelligently**: Focus on unresolved, non-outdated comments by specific reviewers
-
-All commands return structured JSON optimized for agent consumption with minimal tokens and maximum context.
-
-### Example Agent Workflow
-
-```
-User: "Show me unresolved comments on this PR"
-Agent: gh pr-review review view --unresolved --not_outdated
-Agent: [Parses JSON, summarizes 3 unresolved threads]
-
-User: "Reply to the comment about error handling"
-Agent: gh pr-review comments reply --thread-id PRRT_... --body "Fixed in commit abc123"
-Agent: gh pr-review threads resolve --thread-id PRRT_...
-```
-
-### Skill Documentation
-
-See [SKILL.md](skills/gh-pr-review/SKILL.md) for complete skill documentation including:
-- Core commands reference
-- JSON output schemas
-- Best practices for agents
-- Common workflow patterns
+See [skills/references/USAGE.md](skills/references/USAGE.md) for detailed usage examples.
 
 ## Development
 
-Run the test suite and linters locally with cgo disabled (matching the release build):
+Run tests and linters locally with CGO disabled (matching release build):
 
 ```sh
 CGO_ENABLED=0 go test ./...
 CGO_ENABLED=0 golangci-lint run
 ```
 
-Releases are built using the
-[`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile)
-workflow to publish binaries for macOS, Linux, and Windows.
+Releases use the [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile) workflow to publish binaries for macOS, Linux, and Windows.
