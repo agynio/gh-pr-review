@@ -21,6 +21,8 @@ Use this skill when you need to:
 - Poll PRs for updates (comments, conflicts, CI failures)
 - Add reactions to comments or reviews
 - View full conversation history for specific threads
+- Manage pull request draft status (mark as draft/ready for review)
+- List all draft pull requests in a repository
 
 This tool is particularly useful for:
 
@@ -120,7 +122,39 @@ gh pr-review react <comment_id> --type thumbs_up
 
 **Valid reaction types:** `thumbs_up`, `thumbs_down`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`
 
-### 7. Create and Submit Reviews
+### 7. Manage Draft Status
+
+Check if a pull request is a draft:
+
+```sh
+gh pr-review draft status -R owner/repo <pr-number>
+```
+
+Mark a pull request as draft:
+
+```sh
+gh pr-review draft mark -R owner/repo <pr-number>
+```
+
+Mark a pull request as ready for review:
+
+```sh
+gh pr-review draft ready -R owner/repo <pr-number>
+```
+
+List all draft pull requests in the repository:
+
+```sh
+gh pr-review draft list -R owner/repo
+```
+
+**Output formats:**
+
+- `draft status`: `{"pr_number": 1, "is_draft": false, "title": "PR Title"}`
+- `draft mark/ready`: `{"pr_number": 1, "is_draft": true, "status": "marked as draft"}`
+- `draft list`: `[{"pr_number": 1, "is_draft": true, "title": "Draft PR"}]`
+
+### 8. Create and Submit Reviews
 
 Start a pending review:
 

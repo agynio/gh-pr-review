@@ -23,6 +23,7 @@ func newRootCommand() *cobra.Command {
 
 	cmd.AddCommand(newAwaitCommand())
 	cmd.AddCommand(newCommentsCommand())
+	cmd.AddCommand(newDraftCommand())
 	cmd.AddCommand(newReviewCommand())
 	cmd.AddCommand(newThreadsCommand())
 

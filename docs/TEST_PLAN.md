@@ -52,10 +52,19 @@ gh pr-review threads unresolve --thread-id <PRRT_ID> --repo <username>/gh-pr-rev
 gh pr-review react <PRRC_ID> --type thumbs_up
 gh pr-review await --check-only --repo <username>/gh-pr-review-test --pr 1
 gh pr-review review --submit --repo <username>/gh-pr-review-test --pr 1 --review-id <PRR_ID> --event COMMENT --body "Test review submission"
+
+# Draft Management Commands
+gh pr-review draft status --repo <username>/gh-pr-review-test --pr 1
+gh pr-review draft mark --repo <username>/gh-pr-review-test --pr 1
+gh pr-review draft status --repo <username>/gh-pr-review-test --pr 1
+gh pr-review draft ready --repo <username>/gh-pr-review-test --pr 1
+gh pr-review draft status --repo <username>/gh-pr-review-test --pr 1
+gh pr-review draft list --repo <username>/gh-pr-review-test
 ```
 
 ## Expected Output Format
 
+### Thread Output
 ```json
 {
   "thread_id": "PRRT_...",
@@ -65,4 +74,38 @@ gh pr-review review --submit --repo <username>/gh-pr-review-test --pr 1 --review
   "line": 1,
   "is_outdated": false
 }
+```
+
+### Draft Status Output
+```json
+{
+  "pr_number": 1,
+  "is_draft": false,
+  "title": "Test PR"
+}
+```
+
+### Draft Action Output
+```json
+{
+  "pr_number": 1,
+  "is_draft": true,
+  "status": "marked as draft"
+}
+```
+
+### Draft List Output
+```json
+[
+  {
+    "pr_number": 1,
+    "is_draft": true,
+    "title": "Draft PR 1"
+  },
+  {
+    "pr_number": 2,
+    "is_draft": true,
+    "title": "Draft PR 2"
+  }
+]
 ```

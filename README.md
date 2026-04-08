@@ -15,6 +15,8 @@ GitHub's built-in `gh` tool does not show inline comments, review threads, or th
 - Resolve threads programmatically
 - Group and inspect threads with `threads view`
 - Export structured JSON for LLMs and automation
+- Manage pull request draft status (mark as draft/ready for review)
+- List all draft pull requests in a repository
 
 ## Installation
 
@@ -36,6 +38,10 @@ npx skills add v2nic/gh-pr-review
 | Command                         | Description                                                           |
 | ------------------------------- | --------------------------------------------------------------------- |
 | `await`                         | Poll a PR until it needs attention (comments, conflicts, CI failures) |
+| `draft status`                  | Check if a pull request is a draft                                   |
+| `draft mark`                    | Mark a pull request as draft                                         |
+| `draft ready`                   | Mark a pull request as ready for review                              |
+| `draft list`                    | List all draft pull requests in the repository                        |
 | `review --start`                | Opens a pending review                                                |
 | `review --add-comment`          | Adds inline comment (requires `PRR_…` review node ID)                 |
 | `review --edit-comment`         | Updates a comment in a pending review                                 |
@@ -123,6 +129,24 @@ gh pr-review threads resolve --thread-id <ID>
 
 # View full conversation for specific threads
 gh pr-review threads view <thread_id> <thread_id>
+```
+
+### Managing Draft Status
+
+Check and manage pull request draft status:
+
+```sh
+# Check if PR is a draft
+gh pr-review draft status --repo owner/repo --pr 123
+
+# Mark PR as draft
+gh pr-review draft mark --repo owner/repo --pr 123
+
+# Mark PR as ready for review
+gh pr-review draft ready --repo owner/repo --pr 123
+
+# List all draft PRs in repository
+gh pr-review draft list --repo owner/repo
 ```
 
 ### Deleting Comments
