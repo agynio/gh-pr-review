@@ -1,24 +1,20 @@
-# Usage reference (v1.6.0)
+# Usage reference
 
 All commands accept pull request selectors as either:
 
 - a pull request URL (`https://github.com/owner/repo/pull/123`)
 - a pull request number when combined with `-R owner/repo`
 
-Unless stated otherwise, commands emit JSON only. Optional fields are omitted
-instead of serializing as `null`. Array responses default to `[]`.
+Unless stated otherwise, commands emit JSON only. Optional fields are omitted instead of serializing as `null`. Array responses default to `[]`.
 
-## review --start (GraphQL only)
+## review --start
 
 - **Purpose:** Open (or resume) a pending review on the head commit.
 - **Inputs:**
   - Optional pull request selector argument.
   - `--repo` / `--pr` flags when not using the selector shorthand.
-  - `--commit` to pin the pending review to a specific commit SHA (defaults to
-    the pull request head).
-- **Backend:** GitHub GraphQL `addPullRequestReview` mutation.
-- **Output schema:** [`ReviewState`](SCHEMAS.md#reviewstate) — required fields
-  `id` and `state`; optional `submitted_at`.
+  - `--commit` to pin the pending review to a specific commit SHA (defaults to the pull request head).
+- **Output schema:** [`ReviewState`](SCHEMAS.md#reviewstate) — required fields `id` and `state`; optional `submitted_at`.
 
 ```sh
 gh pr-review review --start -R owner/repo 42
@@ -29,19 +25,15 @@ gh pr-review review --start -R owner/repo 42
 }
 ```
 
-## review --add-comment (GraphQL only)
+## review --add-comment
 
 - **Purpose:** Attach an inline thread to an existing pending review.
 - **Inputs:**
-  - `--review-id` **(required):** GraphQL review node ID (must start with
-    `PRR_`). Numeric IDs are rejected.
+  - `--review-id` **(required):** Review node ID (must start with `PRR_`). Numeric IDs are rejected.
   - `--path`, `--line`, `--body` **(required).**
-  - `--body-file`: Read body from a file instead of `--body` (use `"-"` for
-    stdin). Mutually exclusive with `--body`.
+  - `--body-file`: Read body from a file instead of `--body` (use `"-"` for stdin). Mutually exclusive with `--body`.
   - `--side`, `--start-line`, `--start-side` to describe diff positioning.
-- **Backend:** GitHub GraphQL `addPullRequestReviewThread` mutation.
-- **Output schema:** [`ReviewThread`](SCHEMAS.md#reviewthread) — required fields
-  `id`, `path`, `is_outdated`; optional `line`.
+- **Output schema:** [`ReviewThread`](SCHEMAS.md#reviewthread) — required fields `id`, `path`, `is_outdated`; optional `line`.
 
 ```sh
 gh pr-review review --add-comment \
@@ -59,14 +51,12 @@ gh pr-review review --add-comment \
 }
 ```
 
-## review --edit-comment (GraphQL only)
+## review --edit-comment
 
 - **Purpose:** Edit/update the body of a comment in a pending review.
 - **Inputs:**
-  - `--comment-id` **(required):** GraphQL comment node ID (must start with
-    `PRRC_`).
+  - `--comment-id` **(required):** Comment node ID (must start with `PRRC_`).
   - `--body` **(required):** New comment text.
-- **Backend:** GitHub GraphQL `updatePullRequestReviewComment` mutation.
 - **Output schema:** Status payload `{"status": "Comment updated successfully"}`.
 
 ```sh
@@ -80,22 +70,16 @@ gh pr-review review --edit-comment \
 }
 ```
 
-> **Note:** This only works on comments in **pending** reviews. Once a review is
-> submitted, comments cannot be edited via this API.
+> **Note:** This only works on comments in **pending** reviews. Once a review is submitted, comments cannot be edited.
 
-## review view (GraphQL only)
+## review view
 
-- **Purpose:** Emit a consolidated snapshot of reviews, inline comments, and
-  replies. Use it to capture thread identifiers before replying or resolving
-  discussions.
+- **Purpose:** Emit a consolidated snapshot of reviews, inline comments, and replies.
 - **Inputs:**
-- Optional pull request selector argument (URL or number with `--repo`).
+  - Optional pull request selector argument (URL or number with `--repo`).
   - `--repo` / `--pr` flags when not providing the positional number.
-  - Filters: `--reviewer`, `--states`, `--unresolved`, `--not_outdated`,
-    `--tail`.
-  - `--include-comment-node-id` to surface GraphQL comment IDs on parent
-    comments and replies.
-- **Backend:** GitHub GraphQL `pullRequest.reviews` query.
+  - Filters: `--reviewer`, `--states`, `--unresolved`, `--not_outdated`, `--tail`.
+  - `--include-comment-node-id` to surface comment IDs on parent comments and replies.
 - **Output shape:**
 
 ```sh
@@ -125,27 +109,15 @@ gh pr-review review view --reviewer octocat --states CHANGES_REQUESTED -R owner/
 }
 ```
 
-The `thread_id` values surfaced in the report feed directly into
-`comments reply`. Enable `--include-comment-node-id` to decorate parent
-comments and replies with GraphQL `comment_node_id` fields; those keys remain
-omitted otherwise.
+## review --submit
 
-## review --submit (GraphQL only)
-
-- **Purpose:** Finalize a pending review as COMMENT, APPROVE, or
-  REQUEST_CHANGES.
+- **Purpose:** Finalize a pending review as COMMENT, APPROVE, or REQUEST_CHANGES.
 - **Inputs:**
-  - `--review-id` **(required):** GraphQL review node ID (must start with
-    `PRR_`). Numeric REST identifiers are rejected.
+  - `--review-id` **(required):** Review node ID (must start with `PRR_`). Numeric IDs are rejected.
   - `--event` **(required):** One of `COMMENT`, `APPROVE`, `REQUEST_CHANGES`.
-  - `--body`: Optional message. GitHub requires a body for
-    `REQUEST_CHANGES`.
-  - `--body-file`: Read body from a file instead of `--body` (use `"-"` for
-    stdin). Mutually exclusive with `--body`.
-- **Backend:** GitHub GraphQL `submitPullRequestReview` mutation.
-- **Output schema:** Status payload `{"status": "…"}`. When GraphQL returns
-  errors, the command emits `{ "status": "Review submission failed",
-  "errors": [...] }` and exits non-zero.
+  - `--body`: Optional message. GitHub requires a body for `REQUEST_CHANGES`.
+  - `--body-file`: Read body from a file instead of `--body` (use `"-"` for stdin). Mutually exclusive with `--body`.
+- **Output schema:** Status payload `{"status": "…"}`. On errors, the command emits `{ "status": "Review submission failed", "errors": [...] }` and exits non-zero.
 
 ```sh
 gh pr-review review --submit \
@@ -157,32 +129,16 @@ gh pr-review review --submit \
 {
   "status": "Review submitted successfully"
 }
-
-# GraphQL error example
-{
-  "status": "Review submission failed",
-  "errors": [
-    { "message": "mutation failed", "path": ["mutation", "submitPullRequestReview"] }
-  ]
-}
 ```
 
-> **Tip:** `review view` is the preferred way to discover review metadata
-> (pending review IDs, thread IDs, optional comment node IDs, thread state)
-> before mutating threads or
-> replying.
-
-## comments reply (GraphQL only)
+## comments reply
 
 - **Purpose:** Reply to a review thread.
 - **Inputs:**
-  - `--thread-id` **(required):** GraphQL review thread identifier (`PRRT_…`).
-  - `--review-id`: GraphQL review identifier when replying inside your pending
-    review (`PRR_…`).
+  - `--thread-id` **(required):** Review thread identifier (`PRRT_…`).
+  - `--review-id`: Review identifier when replying inside your pending review (`PRR_…`).
   - `--body` **(required,** or use `--body-file`**).**
-  - `--body-file`: Read reply text from a file instead of `--body` (use `"-"`
-    for stdin). Mutually exclusive with `--body`.
-- **Backend:** GitHub GraphQL `addPullRequestReviewThreadReply` mutation.
+  - `--body-file`: Read reply text from a file instead of `--body` (use `"-"` for stdin). Mutually exclusive with `--body`.
 - **Output schema:** [`ReplyMinimal`](SCHEMAS.md#replyminimal).
 
 ```sh
@@ -196,13 +152,12 @@ gh pr-review comments reply \
 }
 ```
 
-## threads list (GraphQL)
+## threads list
 
 - **Purpose:** Enumerate review threads for a pull request.
 - **Inputs:**
   - `--unresolved` to filter unresolved threads only.
   - `--mine` to include only threads you can resolve or participated in.
-- **Backend:** GitHub GraphQL `reviewThreads` query.
 - **Output schema:** Array of [`ThreadSummary`](SCHEMAS.md#threadsummary).
 
 ```sh
@@ -220,13 +175,12 @@ gh pr-review threads list --unresolved --mine -R owner/repo 42
 ]
 ```
 
-## threads view (GraphQL only)
+## threads view
 
 - **Purpose:** Show the full conversation and metadata for one or more review threads by thread ID.
 - **Inputs:**
-  - One or more `--thread-id` values (GraphQL review thread node IDs, e.g. `PRRT_…`).
+  - One or more `--thread-id` values.
   - Pull request selector (`-R owner/repo <pr-number>` or PR URL).
-- **Backend:** GitHub GraphQL `reviewThread` query.
 - **Output schema:** Array of [`ThreadDetail`](SCHEMAS.md#threaddetail).
 
 ```sh
@@ -255,14 +209,11 @@ gh pr-review threads view PRRT_kwDOAAABbFg12345 PRRT_kwDOAAABbFg67890 -R owner/r
 ]
 ```
 
-Returns the full thread conversation, including all comments and metadata, for each specified thread ID. Useful for auditing, scripting, or replying to specific threads.
-
-## threads resolve / threads unresolve (GraphQL only)
+## threads resolve / threads unresolve
 
 - **Purpose:** Resolve or reopen a review thread.
 - **Inputs:**
-  - `--thread-id` **(required):** GraphQL review thread node ID (`PRRT_…`).
-- **Backend:** GraphQL mutations `resolveReviewThread` / `unresolveReviewThread`.
+  - `--thread-id` **(required):** Review thread node ID (`PRRT_…`).
 - **Output schema:** [`ThreadMutationResult`](SCHEMAS.md#threadmutationresult).
 
 ```sh
