@@ -3,3 +3,7 @@ bin/
 *.log
 .DS_Store
 TASKS.md
+
+# Go binaries
+gh-pr-review
+*.exe
