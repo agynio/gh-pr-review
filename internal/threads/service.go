@@ -29,13 +29,13 @@ type ListOptions struct {
 
 // Thread represents a normalized review thread payload for JSON output.
 type Thread struct {
-	ThreadID   string     `json:"threadId"`
-	IsResolved bool       `json:"isResolved"`
-	ResolvedBy *string    `json:"resolvedBy,omitempty"`
-	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
+	ThreadID   string     `json:"thread_id"`
+	IsResolved bool       `json:"is_resolved"`
+	ResolvedBy *string    `json:"resolved_by,omitempty"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 	Path       string     `json:"path"`
 	Line       *int       `json:"line,omitempty"`
-	IsOutdated bool       `json:"isOutdated"`
+	IsOutdated bool       `json:"is_outdated"`
 }
 
 // ActionOptions controls resolve/unresolve operations.
@@ -423,17 +423,17 @@ type ThreadComment struct {
 	ID        string    `json:"id"`
 	Body      string    `json:"body"`
 	Author    string    `json:"author"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ThreadWithComments represents a review thread with all comments.
 type ThreadWithComments struct {
-	ThreadID    string          `json:"threadId"`
-	IsResolved  bool            `json:"isResolved"`
+	ThreadID    string          `json:"thread_id"`
+	IsResolved  bool            `json:"is_resolved"`
 	Path        string          `json:"path"`
 	Line        *int            `json:"line,omitempty"`
-	IsOutdated  bool            `json:"isOutdated"`
+	IsOutdated  bool            `json:"is_outdated"`
 	Comments    []ThreadComment `json:"comments"`
 }
 

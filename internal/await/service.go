@@ -23,7 +23,6 @@ const AWAIT_QUERY = `query AwaitPR(
   $number: Int!,
   $firstComments: Int!,
   $firstThreads: Int!,
-  $firstReviews: Int!,
   $firstReviewComments: Int!,
   $firstCheckSuites: Int!,
   $firstChecks: Int!
@@ -167,16 +166,17 @@ type CheckRun struct {
 // Fetch retrieves PR data for polling.
 func (s *Service) Fetch(identity *resolver.Identity, number int) (*QueryResponse, error) {
 	var result QueryResponse
+	owner := identity.Owner
+	repo := identity.Repo
 	err := s.API.GraphQL(AWAIT_QUERY, map[string]interface{}{
-		"owner":                identity.Owner,
-		"repo":                identity.Repo,
-		"number":              number,
-		"firstComments":       100,
-		"firstThreads":        100,
-		"firstReviews":        100,
+		"owner":              owner,
+		"repo":               repo,
+		"number":             number,
+		"firstComments":      100,
+		"firstThreads":       100,
 		"firstReviewComments": 100,
-		"firstCheckSuites":    100,
-		"firstChecks":         100,
+		"firstCheckSuites":   100,
+		"firstChecks":        100,
 	}, &result)
 	if err != nil {
 		return nil, err

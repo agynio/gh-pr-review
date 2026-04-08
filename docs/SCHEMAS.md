@@ -20,7 +20,13 @@ Used by `review --start` and `review --submit`.
     },
     "state": {
       "type": "string",
-      "enum": ["PENDING", "COMMENTED", "APPROVED", "DISMISSED", "REQUEST_CHANGES"]
+      "enum": [
+        "PENDING",
+        "COMMENTED",
+        "APPROVED",
+        "DISMISSED",
+        "REQUEST_CHANGES"
+      ]
     },
     "submitted_at": {
       "type": "string",
@@ -212,6 +218,26 @@ Returned by `comments reply`.
 }
 ```
 
+## StatusResult
+
+Returned by `review --edit-comment`, `review --delete-comment`, and `review --submit`.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StatusResult",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "operation status message"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
 ## ThreadSummary
 
 Returned by `threads list`.
@@ -221,19 +247,19 @@ Returned by `threads list`.
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ThreadSummary",
   "type": "object",
-  "required": ["threadId", "isResolved", "path", "isOutdated"],
+  "required": ["thread_id", "is_resolved", "path", "is_outdated"],
   "properties": {
-    "threadId": {
+    "thread_id": {
       "type": "string"
     },
-    "isResolved": {
+    "is_resolved": {
       "type": "boolean"
     },
-    "resolvedBy": {
+    "resolved_by": {
       "type": "string",
       "description": "Login of the user who resolved the thread"
     },
-    "updatedAt": {
+    "updated_at": {
       "type": "string",
       "format": "date-time"
     },
@@ -244,7 +270,7 @@ Returned by `threads list`.
       "type": "integer",
       "minimum": 1
     },
-    "isOutdated": {
+    "is_outdated": {
       "type": "boolean"
     }
   },
@@ -268,6 +294,105 @@ Returned by `threads resolve` and `threads unresolve`.
     },
     "is_resolved": {
       "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## ReactionResult
+
+Returned by `react`.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReactionResult",
+  "type": "object",
+  "required": ["node_id", "reaction", "status"],
+  "properties": {
+    "node_id": {
+      "type": "string",
+      "description": "GraphQL node ID of the reacted object"
+    },
+    "reaction": {
+      "type": "string",
+      "description": "Reaction type (thumbs_up, thumbs_down, laugh, hooray, confused, heart, rocket, eyes)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["added"]
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+## AwaitResult
+
+Returned by `await`.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AwaitResult",
+  "type": "object",
+  "required": [
+    "conditions",
+    "unresolved",
+    "general",
+    "conflicts",
+    "failing",
+    "pending",
+    "timed_out",
+    "cancelled",
+    "watched_ms"
+  ],
+  "properties": {
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of detected conditions (e.g., new_comments, merge_conflicts, ci_failures)"
+    },
+    "unresolved": {
+      "type": "integer",
+      "description": "Count of unresolved review threads"
+    },
+    "general": {
+      "type": "integer",
+      "description": "Count of general PR comments"
+    },
+    "conflicts": {
+      "type": "boolean",
+      "description": "Whether the PR has merge conflicts"
+    },
+    "failing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of failing CI check names"
+    },
+    "pending": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of pending CI check names"
+    },
+    "timed_out": {
+      "type": "boolean",
+      "description": "Whether the await operation timed out"
+    },
+    "cancelled": {
+      "type": "boolean",
+      "description": "Whether the await operation was cancelled"
+    },
+    "watched_ms": {
+      "type": "integer",
+      "description": "Time spent watching in milliseconds"
     }
   },
   "additionalProperties": false

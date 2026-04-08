@@ -20,7 +20,7 @@ Unless stated otherwise, commands emit JSON only. Optional fields are omitted in
 gh pr-review review --start -R owner/repo 42
 
 {
-  "id": "PRR_kwDOAAABbcdEFG12",
+  "id": "PRR_...",
   "state": "PENDING"
 }
 ```
@@ -37,14 +37,14 @@ gh pr-review review --start -R owner/repo 42
 
 ```sh
 gh pr-review review --add-comment \
-  --review-id PRR_kwDOAAABbcdEFG12 \
+  --review-id PRR_... \
   --path internal/service.go \
   --line 42 \
   --body "nit: prefer helper" \
   -R owner/repo 42
 
 {
-  "id": "PRRT_kwDOAAABbcdEFG12",
+  "id": "PRRT_...",
   "path": "internal/service.go",
   "is_outdated": false,
   "line": 42
@@ -61,7 +61,7 @@ gh pr-review review --add-comment \
 
 ```sh
 gh pr-review review --edit-comment \
-  --comment-id PRRC_kwDOAAABbcdEFG12 \
+  --comment-id PRRC_... \
   --body "Updated: use helper function here" \
   -R owner/repo 42
 
@@ -71,6 +71,25 @@ gh pr-review review --edit-comment \
 ```
 
 > **Note:** This only works on comments in **pending** reviews. Once a review is submitted, comments cannot be edited.
+
+## review --delete-comment
+
+- **Purpose:** Delete a comment from a pending review.
+- **Inputs:**
+  - `--comment-id` **(required):** Comment node ID (must start with `PRRC_`).
+- **Output schema:** Status payload `{"status": "Comment deleted successfully"}`.
+
+```sh
+gh pr-review review --delete-comment \
+  --comment-id PRRC_... \
+  -R owner/repo 42
+
+{
+  "status": "Comment deleted successfully"
+}
+```
+
+> **Note:** This only works on comments in **pending** reviews. Once a review is submitted, comments cannot be deleted.
 
 ## review view
 
@@ -88,12 +107,12 @@ gh pr-review review view --reviewer octocat --states CHANGES_REQUESTED -R owner/
 {
   "reviews": [
     {
-      "id": "PRR_kwDOAAABbcdEFG12",
+      "id": "PRR_...",
       "state": "CHANGES_REQUESTED",
       "author_login": "octocat",
       "comments": [
         {
-          "thread_id": "PRRT_kwDOAAABbFg12345",
+          "thread_id": "PRRT_...",
           "path": "internal/service.go",
           "line": 42,
           "author_login": "octocat",
@@ -121,7 +140,7 @@ gh pr-review review view --reviewer octocat --states CHANGES_REQUESTED -R owner/
 
 ```sh
 gh pr-review review --submit \
-  --review-id PRR_kwDOAAABbcdEFG12 \
+  --review-id PRR_... \
   --event REQUEST_CHANGES \
   --body "Please cover edge cases" \
   -R owner/repo 42
@@ -143,12 +162,12 @@ gh pr-review review --submit \
 
 ```sh
 gh pr-review comments reply \
-  --thread-id PRRT_kwDOAAABbFg12345 \
+  --thread-id PRRT_... \
   --body "Ack" \
   -R owner/repo 42
 
 {
-  "comment_node_id": "PRRC_kwDOAAABbhi7890"
+  "comment_node_id": "PRRC_..."
 }
 ```
 
@@ -165,12 +184,12 @@ gh pr-review threads list --unresolved --mine -R owner/repo 42
 
 [
   {
-    "threadId": "R_ywDoABC123",
-    "isResolved": false,
-    "updatedAt": "2024-12-19T18:40:11Z",
+    "thread_id": "R_...",
+    "is_resolved": false,
+    "updated_at": "2024-12-19T18:40:11Z",
     "path": "internal/service.go",
     "line": 42,
-    "isOutdated": false
+    "is_outdated": false
   }
 ]
 ```
@@ -184,13 +203,13 @@ gh pr-review threads list --unresolved --mine -R owner/repo 42
 - **Output schema:** Array of [`ThreadDetail`](SCHEMAS.md#threaddetail).
 
 ```sh
-gh pr-review threads view PRRT_kwDOAAABbFg12345 PRRT_kwDOAAABbFg67890 -R owner/repo 42
+gh pr-review threads view PRRT_... PRRT_... -R owner/repo 42
 
 [
   {
-    "threadId": "PRRT_kwDOAAABbFg12345",
-    "isResolved": false,
-    "isOutdated": false,
+    "thread_id": "PRRT_...",
+    "is_resolved": false,
+    "is_outdated": false,
     "path": "internal/service.go",
     "line": 42,
     "comments": [
@@ -217,12 +236,63 @@ gh pr-review threads view PRRT_kwDOAAABbFg12345 PRRT_kwDOAAABbFg67890 -R owner/r
 - **Output schema:** [`ThreadMutationResult`](SCHEMAS.md#threadmutationresult).
 
 ```sh
-gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
+gh pr-review threads resolve --thread-id PRRT_... -R owner/repo 42
 
 {
-  "thread_node_id": "R_ywDoABC123",
+  "thread_node_id": "PRRT_...",
   "is_resolved": true
 }
 ```
 
 `threads unresolve` emits the same schema with `is_resolved` set to `false`.
+
+## react
+
+- **Purpose:** Add a reaction to any reactable GitHub node (review comment, issue comment, PR review body, etc.).
+- **Inputs:**
+  - Node ID (positional argument): GraphQL node ID of the target object.
+  - `--type` **(required):** Reaction type. Valid values: `thumbs_up`, `thumbs_down`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`.
+- **Output schema:** Status payload with node_id, reaction, and status.
+
+```sh
+gh pr-review react PRRC_... --type thumbs_up
+
+{
+  "node_id": "PRRC_...",
+  "reaction": "thumbs_up",
+  "status": "added"
+}
+```
+
+## await
+
+- **Purpose:** Poll a pull request until it needs attention (comments, conflicts, or CI failures).
+- **Inputs:**
+  - Optional pull request selector argument.
+  - `--repo` / `--pr` flags when not using the selector shorthand.
+  - `--mode`: Watch mode - `all`, `comments`, `conflicts`, or `actions` (default: `all`).
+  - `--timeout`: Maximum polling time in seconds (default: 86400 = 1 day).
+  - `--interval`: Polling interval in seconds (default: 300 = 5 minutes).
+  - `--debounce`: Debounce duration in seconds (default: 30).
+  - `--check-only`: Check once and exit without polling.
+- **Exit codes:**
+  - `0` - Work detected (PR needs attention)
+  - `1` - Error occurred
+  - `2` - Timed out with no work detected
+- **Output schema:** Result object with conditions, unresolved count, conflicts, and CI status.
+
+```sh
+gh pr-review await --check-only -R owner/repo 42
+
+{
+  "conditions": ["new_comments"],
+  "unresolved": 3,
+  "general": 1,
+  "conflicts": false,
+  "failing": ["ci-check-1"],
+  "pending": ["ci-check-2"],
+  "timed_out": false,
+  "cancelled": false,
+  "watched_ms": 0
+}
+```

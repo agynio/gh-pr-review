@@ -17,6 +17,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run Prettier check
+        run: npx --yes prettier --check "*.md" "docs/*.md" "skills/**/*.md"
       - name: Run tests
         run: go test ./...
       - name: Run golangci-lint

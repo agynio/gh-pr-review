@@ -96,7 +96,7 @@ func TestThreadsListCommandOutputsJSON(t *testing.T) {
 	var payload []map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	require.Len(t, payload, 1)
-	assert.Equal(t, "T_node", payload[0]["threadId"])
+	assert.Equal(t, "T_node", payload[0]["thread_id"])
 	assert.Equal(t, "internal/service.go", payload[0]["path"])
 	assert.Equal(t, float64(27), payload[0]["line"])
 }
@@ -290,12 +290,12 @@ func TestThreadsViewCommand_SingleAndMultiple(t *testing.T) {
 	var payload []map[string]interface{}
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	require.Len(t, payload, 2)
-	assert.Equal(t, "T1", payload[0]["threadId"])
+	assert.Equal(t, "T1", payload[0]["thread_id"])
 	assert.Equal(t, "foo.go", payload[0]["path"])
-	assert.Equal(t, false, payload[0]["isResolved"])
-	assert.Equal(t, "T2", payload[1]["threadId"])
+	assert.Equal(t, false, payload[0]["is_resolved"])
+	assert.Equal(t, "T2", payload[1]["thread_id"])
 	assert.Equal(t, "bar.go", payload[1]["path"])
-	assert.Equal(t, true, payload[1]["isResolved"])
+	assert.Equal(t, true, payload[1]["is_resolved"])
 	// Comments structure
 	comments, ok := payload[0]["comments"].([]interface{})
 	require.True(t, ok)

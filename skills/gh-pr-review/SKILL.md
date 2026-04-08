@@ -15,15 +15,20 @@ Use this skill when you need to:
 - Reply to review comments programmatically
 - Resolve or unresolve review threads
 - Create and submit PR reviews with inline comments
-- Edit comments in pending reviews
+- Edit or delete comments in pending reviews
 - Access PR review context for automated workflows
 - Filter reviews by state, reviewer, or resolution status
+- Poll PRs for updates (comments, conflicts, CI failures)
+- Add reactions to comments or reviews
+- View full conversation history for specific threads
 
 This tool is particularly useful for:
+
 - Automated PR review workflows
 - LLM-based code review agents
 - Terminal-based PR review processes
 - Getting structured review data without multiple API calls
+- CI/CD pipelines that need to wait for PR attention
 
 ## Installation
 
@@ -44,11 +49,15 @@ gh pr-review review view -R owner/repo --pr <number>
 ```
 
 **Useful filters:**
+
 - `--unresolved` - Only show unresolved threads
 - `--reviewer <login>` - Filter by specific reviewer
-- `--states <APPROVED|CHANGES_REQUESTED|COMMENTED|DISMISSED>` - Filter by review state
+- `--states <APPROVED|CHANGES_REQUESTED|COMMENTED|DISMISSED|PENDING>` - Filter by review state
 - `--tail <n>` - Keep only last n replies per thread
 - `--not_outdated` - Exclude outdated threads
+- `--author <login>` - Filter threads to those containing a comment by this author
+- `--include-resolved` - Include resolved threads (overrides --unresolved)
+- `--include-comment-node-id` - Add comment node identifiers to parent comments and replies
 
 **Output:** Structured JSON with reviews, comments, thread_ids, and resolution status.
 
@@ -58,7 +67,7 @@ Reply to an existing inline comment thread:
 
 ```sh
 gh pr-review comments reply <pr-number> -R owner/repo \
-  --thread-id <PRRT_...> \
+  --thread-id <thread_id> \
   --body "Your reply message"
 ```
 
@@ -66,7 +75,7 @@ Alternatively, read the reply from a file (use `"-"` for stdin):
 
 ```sh
 gh pr-review comments reply <pr-number> -R owner/repo \
-  --thread-id <PRRT_...> \
+  --thread-id <thread_id> \
   --body-file reply.md
 ```
 
@@ -78,15 +87,40 @@ Get a filtered list of review threads:
 gh pr-review threads list -R owner/repo <pr-number> --unresolved --mine
 ```
 
-### 4. Resolve/Unresolve Threads
+**Filters:**
+
+- `--unresolved` - Only show unresolved threads
+- `--mine` - Show only threads involving or resolvable by the viewer
+
+### 4. View Specific Threads
+
+View full conversation for one or more threads by ID:
+
+```sh
+gh pr-review threads view <thread_id> <thread_id>
+```
+
+This returns the complete comment history for the specified threads.
+
+### 5. Resolve/Unresolve Threads
 
 Mark threads as resolved:
 
 ```sh
-gh pr-review threads resolve -R owner/repo <pr-number> --thread-id <PRRT_...>
+gh pr-review threads resolve -R owner/repo <pr-number> --thread-id <thread_id>
 ```
 
-### 5. Create and Submit Reviews
+### 6. Add Reactions
+
+Add reactions to any GitHub node (comments, reviews, etc.):
+
+```sh
+gh pr-review react <comment_id> --type thumbs_up
+```
+
+**Valid reaction types:** `thumbs_up`, `thumbs_down`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`
+
+### 7. Create and Submit Reviews
 
 Start a pending review:
 
@@ -98,7 +132,7 @@ Add inline comments to pending review:
 
 ```sh
 gh pr-review review --add-comment \
-  --review-id <PRR_...> \
+  --review-id <review_id> \
   --path <file-path> \
   --line <line-number> \
   --body "Your comment" \
@@ -109,27 +143,45 @@ Or read the comment body from a file (use `"-"` for stdin):
 
 ```sh
 gh pr-review review --add-comment \
-  --review-id <PRR_...> \
+  --review-id <review_id> \
   --path <file-path> \
   --line <line-number> \
   --body-file comment.md \
   -R owner/repo <pr-number>
 ```
 
-**Edit a comment in pending review** (requires comment node ID PRRC_...):
+**Edit a comment in pending review** (requires comment node ID):
 
 ```sh
 gh pr-review review --edit-comment \
-  --comment-id <PRRC_...> \
+  --comment-id <comment_id> \
   --body "Updated comment text" \
   -R owner/repo <pr-number>
 ```
+
+**Delete a comment from pending review** (requires comment node ID):
+
+```sh
+gh pr-review review --delete-comment \
+  --comment-id <comment_id> \
+  -R owner/repo <pr-number>
+```
+
+**Additional flags for add-comment:**
+
+- `--side <LEFT|RIGHT>` - Diff side for inline comment (default: RIGHT)
+- `--start-line <n>` - Start line for multi-line comments
+- `--start-side <LEFT|RIGHT>` - Start side for multi-line comments
+
+**Additional flags for review start:**
+
+- `--commit <sha>` - Pin the pending review to a specific commit (defaults to current head)
 
 Submit the review:
 
 ```sh
 gh pr-review review --submit \
-  --review-id <PRR_...> \
+  --review-id <review_id> \
   --event <APPROVE|REQUEST_CHANGES|COMMENT> \
   --body "Overall review summary" \
   -R owner/repo <pr-number>
@@ -200,25 +252,66 @@ gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr 
 2. For each thread_id, reply: `gh pr-review comments reply <pr> -R owner/repo --thread-id <id> --body "..."`
 3. Optionally resolve: `gh pr-review threads resolve <pr> -R owner/repo --thread-id <id>`
 
+### Wait for PR Attention
+
+Poll a PR until it needs attention (comments, conflicts, or CI failures):
+
+```sh
+# Check once and exit
+gh pr-review await --check-only -R owner/repo <pr>
+
+# Poll until work detected (default: 1 day timeout, 5 minute interval)
+gh pr-review await -R owner/repo <pr>
+
+# Poll for comments only with custom timeout
+gh pr-review await --mode comments --timeout 3600 -R owner/repo <pr>
+```
+
+**Exit codes:**
+
+- `0` - Work detected (PR needs attention)
+- `1` - Error occurred
+- `2` - Timed out with no work detected
+
+**Await flags:**
+
+- `--mode <all|comments|conflicts|actions>` - Watch mode (default: all)
+- `--timeout <seconds>` - Maximum polling time (default: 86400 = 1 day)
+- `--interval <seconds>` - Polling interval (default: 300 = 5 minutes)
+- `--debounce <seconds>` - Debounce duration (default: 30)
+- `--check-only` - Check once and exit without polling
+
 ### Create Review with Inline Comments
 
 1. Start: `gh pr-review review --start -R owner/repo <pr>`
-2. Add comments: `gh pr-review review --add-comment -R owner/repo <pr> --review-id <PRR_...> --path <file> --line <num> --body "..."` (or use `--body-file <path>`)
-3. Edit comments (if needed): `gh pr-review review --edit-comment -R owner/repo <pr> --comment-id <PRRC_...> --body "Updated text"`
-4. Submit: `gh pr-review review --submit -R owner/repo <pr> --review-id <PRR_...> --event REQUEST_CHANGES --body "Summary"`
+2. Add comments: `gh pr-review review --add-comment -R owner/repo <pr> --review-id <review_id> --path <file> --line <num> --body "..."` (or use `--body-file <path>`)
+3. Edit comments (if needed): `gh pr-review review --edit-comment -R owner/repo <pr> --comment-id <comment_id> --body "Updated text"`
+4. Delete comments (if needed): `gh pr-review review --delete-comment -R owner/repo <pr> --comment-id <comment_id>`
+5. Submit: `gh pr-review review --submit -R owner/repo <pr> --review-id <review_id> --event REQUEST_CHANGES --body "Summary"`
+
+### 6. Add Reactions to Comments
+
+Add reactions to any GitHub node (comments, reviews, etc.):
+
+```sh
+gh pr-review react <comment_id> --type thumbs_up
+```
+
+**Valid reaction types:** `thumbs_up`, `thumbs_down`, `laugh`, `hooray`, `confused`, `heart`, `rocket`, `eyes`
 
 ## Important Notes
 
-- This fork adds: `threads view`, `threads resolve-all`, `--author` filter, `--since` filter, `--commit` reply-then-resolve, and `--body-file` support.
-- All IDs use GraphQL format (PRR_... for reviews, PRRT_... for threads)
+- All IDs use GraphQL format (PRR*... for reviews, PRRT*... for threads, PRRC\_... for comments)
 - Commands use pure GraphQL (no REST API fallbacks)
 - Empty arrays `[]` are returned when no data matches filters
-- The `--include-comment-node-id` flag adds PRRC_... IDs when needed
 - Thread replies are sorted by created_at ascending
+- Comments can only be edited/deleted while the review is in pending state
+- Numeric review IDs are rejected; use GraphQL node IDs (PRR\_...)
+- The `--body-file` flag supports "-" for stdin input
+- The `--review-id` flag in `comments reply` is for replying inside your pending review
 
 ## Documentation Links
 
-- [docs/USAGE.md](docs/USAGE.md) — Command reference
 - [docs/SCHEMAS.md](docs/SCHEMAS.md) — JSON schemas
 - [skills/references/USAGE.md](skills/references/USAGE.md) — Detailed usage examples
 - This is a fork of [agynio/gh-pr-review](https://github.com/agynio/gh-pr-review).
