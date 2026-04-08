@@ -222,3 +222,29 @@ CGO_ENABLED=0 golangci-lint run
 ```
 
 Releases use the [`cli/gh-extension-precompile`](https://github.com/cli/gh-extension-precompile) workflow to publish binaries for macOS, Linux, and Windows.
+
+Release descriptions are updated by an AI agent using a template and git commands to generate commit-based changelogs.
+
+Release note template:
+
+```markdown
+## What's Changed
+
+### New Features
+
+- feat: <description> ([commit_hash](<[%3Chash%3E](%3Ccommit_url%3E)>))
+
+### Bug Fixes
+
+- fix: <description> ([commit_hash](<[%3Chash%3E](%3Ccommit_url%3E)>))
+
+### Chores
+
+- chore/docs/test: <description> ([commit_hash](<[%3Chash%3E](%3Ccommit_url%3E)>))
+```
+
+Git log command:
+
+```sh
+git log <previous_tag>..<current_tag> --pretty=format:"- %s ([%h](<commit_url>))"
+```
