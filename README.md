@@ -100,8 +100,7 @@ The quickest path from opening a pending review to resolving threads:
      "path": "internal/service.go",
      "is_outdated": false,
      "line": 42
-   }
-   ```
+   }```
 
    **Edit comments before submission (optional).** Use `--edit-comment` with
    a comment node ID (`PRRC_…`) and new `--body` to update a comment:
