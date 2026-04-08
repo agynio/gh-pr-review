@@ -2,7 +2,6 @@ package report
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	_ "embed"
@@ -95,7 +94,9 @@ func TestServiceFetchIncludesCommentNodeID(t *testing.T) {
 	}
 }
 
-func TestServiceFetchErrorsOnMissingReviewDBID(t *testing.T) {
+func TestServiceFetchAllowsMissingReviewDBID(t *testing.T) {
+	// PENDING reviews don't have databaseId in GraphQL (ephemeral, no submittedAt)
+	// The service should handle this gracefully.
 	broken := map[string]any{}
 	if err := json.Unmarshal(reportResponseFixture, &broken); err != nil {
 		t.Fatalf("unmarshal fixture: %v", err)
@@ -115,12 +116,10 @@ func TestServiceFetchErrorsOnMissingReviewDBID(t *testing.T) {
 	fake := &stubAPI{t: t, payload: modified}
 	svc := NewService(fake)
 
+	// Should not error even when databaseId is missing (PENDING review case)
 	_, err = svc.Fetch(resolver.Identity{Owner: "agyn", Repo: "sandbox", Number: 51}, Options{})
-	if err == nil {
-		t.Fatal("expected error for missing databaseId")
-	}
-	if !strings.Contains(err.Error(), "review missing databaseId") {
-		t.Fatalf("expected missing databaseId error, got %v", err)
+	if err != nil {
+		t.Fatalf("expected no error for missing databaseId (PENDING review), got %v", err)
 	}
 }
 

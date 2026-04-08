@@ -117,9 +117,6 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 	reviews := make([]Review, 0, len(prData.Reviews.Nodes))
 
 	for _, node := range prData.Reviews.Nodes {
-		if node.DatabaseID == nil {
-			return Report{}, errors.New("review missing databaseId")
-		}
 		if node.Author == nil || node.Author.Login == "" {
 			return Report{}, errors.New("review missing author login")
 		}
@@ -132,7 +129,10 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 			State:       state,
 			Body:        node.Body,
 			AuthorLogin: node.Author.Login,
-			DatabaseID:  *node.DatabaseID,
+		}
+		// PENDING reviews don't have databaseId (ephemeral, no submittedAt)
+		if node.DatabaseID != nil {
+			review.DatabaseID = *node.DatabaseID
 		}
 		if node.SubmittedAt != nil && strings.TrimSpace(*node.SubmittedAt) != "" {
 			parsed, err := time.Parse(time.RFC3339, *node.SubmittedAt)
