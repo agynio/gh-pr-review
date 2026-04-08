@@ -79,6 +79,8 @@ type reviewOptions struct {
 }
 
 func runReview(cmd *cobra.Command, opts *reviewOptions) error {
+	inferRepo(&opts.Repo)
+
 	actions := []bool{opts.Start, opts.AddComment, opts.EditComment, opts.DeleteComment, opts.Submit}
 	enabled := 0
 	for _, flag := range actions {
