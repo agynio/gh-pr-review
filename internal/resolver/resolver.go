@@ -67,7 +67,7 @@ func Resolve(selector, repoFlag, host string) (Identity, error) {
 	if n, err := strconv.Atoi(selector); err == nil && n > 0 {
 		owner, repo, err := splitRepo(repoFlag)
 		if err != nil {
-			return Identity{}, fmt.Errorf("--repo must be owner/repo when using numeric selectors: %w", err)
+			return Identity{}, err
 		}
 		return Identity{Owner: owner, Repo: repo, Host: host, Number: n}, nil
 	}
@@ -120,7 +120,7 @@ func isNumeric(selector string) bool {
 
 func splitRepo(repoFlag string) (string, string, error) {
 	if repoFlag == "" {
-		return "", "", errors.New("--repo must be owner/repo when using numeric selectors, or run from a git repository to infer automatically")
+		return "", "", errors.New("no repository specified: use --repo owner/repo, or run from a git repository to infer automatically")
 	}
 	parts := strings.Split(repoFlag, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
