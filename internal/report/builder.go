@@ -71,7 +71,7 @@ func BuildReport(reviews []Review, threads []Thread, filters FilterOptions) Repo
 		if authorFilter != "" {
 			matched := false
 			for _, comment := range thread.Comments {
-				if strings.ToLower(comment.AuthorLogin) == authorFilter {
+				if strings.Contains(strings.ToLower(comment.AuthorLogin), authorFilter) {
 					matched = true
 					break
 				}

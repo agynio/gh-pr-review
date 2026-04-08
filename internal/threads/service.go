@@ -66,7 +66,6 @@ type ActionResult struct {
 	Error        string `json:"error,omitempty"`
 }
 
-
 // ResolveAllOptions configures bulk resolution.
 type ResolveAllOptions struct {
 	Author     string // only resolve threads started by this author
@@ -101,6 +100,7 @@ func (s *Service) ResolveAll(pr resolver.Identity, opts ResolveAllOptions) ([]Ac
 	}
 	return results, nil
 }
+
 type pullContext struct {
 	identity resolver.Identity
 	nodeID   string
@@ -142,7 +142,7 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error)
 				latest = comment.UpdatedAt
 				hasStamp = true
 			}
-				if !authorMatched && comment.Author != nil && strings.Contains(strings.ToLower(comment.Author.Login), authorFilter) {
+			if !authorMatched && comment.Author != nil && strings.Contains(strings.ToLower(comment.Author.Login), authorFilter) {
 				authorMatched = true
 			}
 		}
@@ -159,7 +159,6 @@ func (s *Service) List(pr resolver.Identity, opts ListOptions) ([]Thread, error)
 		if !opts.Since.IsZero() && (!hasStamp || latest.Before(opts.Since)) {
 			continue
 		}
-
 
 		var resolvedBy *string
 		if node.ResolvedBy != nil && node.ResolvedBy.Login != "" {
@@ -362,6 +361,9 @@ func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, res
 	if threadID == "" {
 		return ActionResult{}, errors.New("thread id is required")
 	}
+	commit := strings.TrimSpace(opts.Commit)
+	message := strings.TrimSpace(opts.Message)
+	reaction := strings.TrimSpace(opts.React)
 
 	thread, err := s.fetchThread(pr.Host, threadID)
 	if err != nil {
@@ -369,11 +371,12 @@ func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, res
 	}
 
 	desired := resolve
-	if thread.IsResolved == desired {
+	alreadyDesired := thread.IsResolved == desired
+	if alreadyDesired && !(resolve && (commit != "" || message != "" || reaction != "")) {
 		return ActionResult{ThreadNodeID: thread.ID, IsResolved: thread.IsResolved}, nil
 	}
 
-	if resolve && !thread.ViewerCanResolve {
+	if resolve && !alreadyDesired && !thread.ViewerCanResolve {
 		return ActionResult{}, errors.New("viewer cannot resolve this thread")
 	}
 	if !resolve && !thread.ViewerCanUnresolve {
@@ -381,18 +384,18 @@ func (s *Service) changeResolution(pr resolver.Identity, opts ActionOptions, res
 	}
 
 	if resolve {
-		result, err := s.performResolve(threadID, strings.TrimSpace(opts.Commit), strings.TrimSpace(opts.Message), pr.Host, pr.Owner, pr.Repo)
+		result, err := s.performResolve(threadID, commit, message, pr.Host, pr.Owner, pr.Repo, !alreadyDesired)
 		if err != nil {
 			return ActionResult{}, err
 		}
 		// Add reaction to first comment if requested
-		if opts.React != "" {
+		if reaction != "" {
 			commentID := thread.FirstCommentID()
 			if commentID != "" {
-				if err := s.React(commentID, opts.React); err != nil {
+				if err := s.React(commentID, reaction); err != nil {
 					return ActionResult{}, fmt.Errorf("add reaction: %w", err)
 				}
-				result.Reaction = opts.React
+				result.Reaction = reaction
 			}
 		}
 		return result, nil
@@ -434,7 +437,7 @@ func (d *threadDetails) FirstCommentID() string {
 	return ""
 }
 
-func (s *Service) performResolve(threadID, commit, message, host, owner, repo string) (ActionResult, error) {
+func (s *Service) performResolve(threadID, commit, message, host, owner, repo string, applyResolution bool) (ActionResult, error) {
 	var replyBody string
 
 	// Post message reply first if provided (e.g. thumbs_down explanation)
@@ -464,6 +467,10 @@ func (s *Service) performResolve(threadID, commit, message, host, owner, repo st
 			return ActionResult{}, fmt.Errorf("post commit reply: %w", err)
 		}
 		replyBody = commitReply
+	}
+
+	if !applyResolution {
+		return ActionResult{ThreadNodeID: threadID, IsResolved: true, ReplyBody: replyBody}, nil
 	}
 
 	variables := map[string]interface{}{"threadId": threadID}
@@ -579,6 +586,7 @@ mutation AddThreadReply($threadId: ID!, $body: String!) {
   }
 }
 `
+
 // ValidReactions delegates to the reactions package for backward compatibility.
 var ValidReactions = reactions.ValidReactions
 

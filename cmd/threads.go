@@ -67,7 +67,6 @@ type threadsListOptions struct {
 	Output         string
 }
 
-
 func runThreadsList(cmd *cobra.Command, opts *threadsListOptions) error {
 	inferPR(opts.Selector, &opts.Pull)
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
@@ -240,7 +239,6 @@ func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolv
 	return encodeJSON(cmd, result)
 }
 
-
 // newThreadsResolveAllCommand creates the resolve-all subcommand.
 func newThreadsResolveAllCommand() *cobra.Command {
 	opts := &threadsResolveAllOptions{}
@@ -332,10 +330,14 @@ func runThreadsResolveAll(cmd *cobra.Command, opts *threadsResolveAllOptions) er
 var hexSHARe = regexp.MustCompile(`(?i)^[0-9a-f]{7,40}$`)
 
 func resolveCommitRef(ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", fmt.Errorf("git ref is required")
+	}
 	if hexSHARe.MatchString(ref) {
 		return ref, nil
 	}
-	out, err := exec.Command("git", "rev-parse", "--short", "--", ref).Output()
+	out, err := exec.Command("git", "rev-parse", "--verify", "--short", "--end-of-options", ref+"^{commit}").Output()
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve git ref %q: %w", ref, err)
 	}

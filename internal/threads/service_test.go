@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
-	"testing"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/agynio/gh-pr-review/internal/resolver"
@@ -553,7 +553,6 @@ func assign(dst interface{}, payload interface{}) error {
 	return json.Unmarshal(data, dst)
 }
 
-
 // ─── F2: ResolveAll tests ─────────────────────────────────────────────────────
 
 func TestResolveAllResolvesUnresolvedThreads(t *testing.T) {
@@ -692,6 +691,74 @@ func TestResolveAllContinuesOnError(t *testing.T) {
 	}
 	assert.False(t, byID["T_fail"].IsResolved)
 	assert.True(t, byID["T_ok"].IsResolved)
+}
+
+func TestResolveAllIncludeResolvedStillPostsCommitReply(t *testing.T) {
+	svc := &Service{}
+	var calls []string
+	var replyBody string
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 9, "PR_resolved", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case listThreadsQuery:
+				ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "T_done", "isResolved": true, "isOutdated": false, "path": "done.go",
+									"viewerCanResolve": false, "viewerCanUnresolve": true,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 42},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case threadDetailsQuery:
+				calls = append(calls, "details")
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T_done",
+						"isResolved":         true,
+						"viewerCanResolve":   false,
+						"viewerCanUnresolve": true,
+						"comments": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{"id": "C_done"},
+							},
+						},
+					},
+				})
+			case addThreadReplyMutation:
+				calls = append(calls, "reply")
+				replyBody, _ = variables["body"].(string)
+				return nil
+			case resolveThreadMutation:
+				calls = append(calls, "resolve")
+				return nil
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Host: "github.com", Owner: "octo", Repo: "demo", Number: 9}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{
+		Commit:     "abc1234",
+		Unresolved: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "T_done", results[0].ThreadNodeID)
+	assert.True(t, results[0].IsResolved)
+	assert.Equal(t, []string{"details", "reply"}, calls)
+	assert.Contains(t, replyBody, "abc1234")
 }
 
 // ─── F3: --since filter test ──────────────────────────────────────────────────
@@ -987,4 +1054,3 @@ func TestResolveWithReactSkipsReactionWhenNoComments(t *testing.T) {
 	assert.False(t, reactCalled, "reaction should NOT be called when thread has no comments")
 	assert.True(t, result.IsResolved)
 }
-

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -274,22 +275,22 @@ func TestThreadsResolveAllCommand(t *testing.T) {
 					},
 				},
 			})
-			case strings.Contains(query, "ThreadDetails"):
-				threadID, _ := variables["id"].(string)
-				return assignJSON(result, map[string]interface{}{
-					"node": map[string]interface{}{
-						"id": threadID, "isResolved": false,
-						"viewerCanResolve": true, "viewerCanUnresolve": false,
-						"comments": map[string]interface{}{
-							"nodes": []map[string]interface{}{
-								{"id": "C_bulk_first"},
-							},
+		case strings.Contains(query, "ThreadDetails"):
+			threadID, _ := variables["id"].(string)
+			return assignJSON(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"id": threadID, "isResolved": false,
+					"viewerCanResolve": true, "viewerCanUnresolve": false,
+					"comments": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{"id": "C_bulk_first"},
 						},
 					},
-				})
-			case strings.Contains(query, "addPullRequestReviewThreadReply"):
-				return nil
-			case strings.Contains(query, "resolveReviewThread"):
+				},
+			})
+		case strings.Contains(query, "addPullRequestReviewThreadReply"):
+			return nil
+		case strings.Contains(query, "resolveReviewThread"):
 			return assignJSON(result, map[string]interface{}{
 				"resolveReviewThread": map[string]interface{}{
 					"thread": map[string]interface{}{"id": "TBulk1", "isResolved": true},
@@ -401,6 +402,32 @@ func TestResolveCommitRefFullSHA(t *testing.T) {
 	got, err := resolveCommitRef(sha)
 	require.NoError(t, err)
 	assert.Equal(t, sha, got)
+}
+
+func TestResolveCommitRefResolvesSymbolicRefs(t *testing.T) {
+	branchOut, err := exec.Command("git", "branch", "--show-current").Output()
+	if err != nil {
+		t.Skipf("git branch lookup unavailable: %v", err)
+	}
+
+	refs := []string{"HEAD", strings.TrimSpace(string(branchOut))}
+	tests := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if strings.TrimSpace(ref) != "" {
+			tests = append(tests, ref)
+		}
+	}
+	for _, ref := range tests {
+		ref := ref
+		t.Run(ref, func(t *testing.T) {
+			wantOut, err := exec.Command("git", "rev-parse", "--verify", "--short", "--end-of-options", ref+"^{commit}").Output()
+			require.NoError(t, err)
+
+			got, err := resolveCommitRef(ref)
+			require.NoError(t, err)
+			assert.Equal(t, strings.TrimSpace(string(wantOut)), got)
+		})
+	}
 }
 
 func TestResolveCommandWithHexSHACommit(t *testing.T) {

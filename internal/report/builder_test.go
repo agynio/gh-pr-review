@@ -310,6 +310,29 @@ func TestBuildReportAuthorFilterIsCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestBuildReportAuthorFilterMatchesSubstring(t *testing.T) {
+	reviews := []report.Review{
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "CodeRabbitAI", DatabaseID: 1},
+	}
+	threads := []report.Thread{
+		{
+			ID: "T1", IsResolved: false,
+			Comments: []report.ThreadComment{
+				{NodeID: "C1", DatabaseID: 101, Body: "found a bug", AuthorLogin: "chatgpt-codex-connector", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+	}
+
+	result := report.BuildReport(reviews, threads, report.FilterOptions{Author: "codex"})
+	totalComments := 0
+	for _, r := range result.Reviews {
+		totalComments += len(r.Comments)
+	}
+	if totalComments != 1 {
+		t.Fatalf("expected 1 thread with substring author match, got %d", totalComments)
+	}
+}
+
 // ─── Tests for --all (IncludeResolved) ──────────────────────────────────────
 
 func TestBuildReportIncludeResolvedShowsResolvedThreads(t *testing.T) {

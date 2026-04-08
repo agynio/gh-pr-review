@@ -35,7 +35,7 @@ func newReviewViewCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.NotOutdated, "not_outdated", false, "Exclude outdated threads")
 	cmd.Flags().IntVar(&opts.TailReplies, "tail", 0, "Limit to the last N replies per thread (0 = all)")
 	cmd.Flags().BoolVar(&opts.IncludeCommentNodeID, "include-comment-node-id", false, "Include comment_node_id fields for parent comments and replies")
-	cmd.Flags().StringVar(&opts.Author, "author", "", "Filter threads to those containing a comment by this author login (case-insensitive)")
+	cmd.Flags().StringVar(&opts.Author, "author", "", "Filter threads to those containing a comment by this author login (substring, case-insensitive)")
 	cmd.Flags().BoolVar(&opts.IncludeResolved, "include-resolved", false, "Include resolved threads (overrides --unresolved)")
 
 	return cmd
