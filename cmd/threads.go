@@ -56,11 +56,13 @@ type threadsListOptions struct {
 }
 
 func runThreadsList(cmd *cobra.Command, opts *threadsListOptions) error {
+	inferPR(opts.Selector, &opts.Pull)
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
 	}
 
+	inferRepo(&opts.Repo)
 	hostEnv := os.Getenv("GH_HOST")
 	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
 	if err != nil {
@@ -145,11 +147,13 @@ func runThreadsUnresolve(cmd *cobra.Command, opts *threadsMutationOptions) error
 }
 
 func runThreadsMutation(cmd *cobra.Command, opts *threadsMutationOptions, resolve bool) error {
+	inferPR(opts.Selector, &opts.Pull)
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err
 	}
 
+	inferRepo(&opts.Repo)
 	hostEnv := os.Getenv("GH_HOST")
 	identity, err := resolver.Resolve(selector, opts.Repo, hostEnv)
 	if err != nil {
