@@ -56,6 +56,11 @@ type SubmitInput struct {
 	Body     string
 }
 
+// DeleteCommentInput contains the payload for deleting a comment from a pending review.
+type DeleteCommentInput struct {
+	CommentID string
+}
+
 // NewService constructs a review Service.
 func NewService(api ghcli.API) *Service {
 	return &Service{API: api}
@@ -230,6 +235,36 @@ func (s *Service) Submit(_ resolver.Identity, input SubmitInput) (*SubmitStatus,
 	}
 
 	return &SubmitStatus{Success: true}, nil
+}
+
+// DeleteComment deletes a comment from a pending review.
+func (s *Service) DeleteComment(_ resolver.Identity, input DeleteCommentInput) error {
+	commentID := strings.TrimSpace(input.CommentID)
+	if commentID == "" {
+		return errors.New("comment id is required")
+	}
+	if !strings.HasPrefix(commentID, "PRRC_") {
+		return fmt.Errorf("invalid comment id %q: must be a GraphQL node id (PRRC_...)", input.CommentID)
+	}
+
+	const mutation = `mutation($input:DeletePullRequestReviewCommentInput!){
+  deletePullRequestReviewComment(input:$input){
+    pullRequestReview { id }
+  }
+}`
+
+	variables := map[string]interface{}{
+		"input": map[string]interface{}{
+			"id": commentID,
+		},
+	}
+
+	var resp struct{}
+	if err := s.API.GraphQL(mutation, variables, &resp); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) currentViewer() (string, error) {

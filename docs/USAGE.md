@@ -57,6 +57,28 @@ gh pr-review review --add-comment \
 }
 ```
 
+## review --delete-comment (GraphQL only)
+
+- **Purpose:** Delete a comment from a pending review.
+- **Inputs:**
+  - `--comment-id` **(required):** GraphQL comment node ID (must start with
+    `PRRC_`).
+- **Backend:** GitHub GraphQL `deletePullRequestReviewComment` mutation.
+- **Output schema:** Status payload `{"status": "Comment deleted successfully"}`.
+
+```sh
+gh pr-review review --delete-comment \
+  --comment-id PRRC_kwDOAAABbcdEFG12 \
+  -R owner/repo 42
+
+{
+  "status": "Comment deleted successfully"
+}
+```
+
+> **Note:** This only works on comments in **pending** reviews. Once a review is
+> submitted, comments cannot be deleted via this API.
+
 ## review view (GraphQL only)
 
 - **Purpose:** Emit a consolidated snapshot of reviews, inline comments, and
