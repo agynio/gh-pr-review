@@ -64,8 +64,9 @@ func newCommentsReplyCommand(parent *commentsOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.ThreadID, "thread-id", "", "Review thread identifier to reply to")
 	cmd.Flags().StringVar(&opts.ReviewID, "review-id", "", "GraphQL review identifier when replying inside a pending review")
 	cmd.Flags().StringVar(&opts.Body, "body", "", "Reply text")
+	cmd.Flags().StringVar(&opts.BodyFile, "body-file", "", "Read reply text from file (use \"-\" for stdin)")
 	_ = cmd.MarkFlagRequired("thread-id")
-	_ = cmd.MarkFlagRequired("body")
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 
 	return cmd
 }
@@ -77,9 +78,19 @@ type commentsReplyOptions struct {
 	ThreadID string
 	ReviewID string
 	Body     string
+	BodyFile string
 }
 
 func runCommentsReply(cmd *cobra.Command, opts *commentsReplyOptions) error {
+	body, err := resolveBody(opts.Body, opts.BodyFile)
+	if err != nil {
+		return err
+	}
+	if body == "" {
+		return errors.New("--body or --body-file is required")
+	}
+	opts.Body = body
+
 	selector, err := resolver.NormalizeSelector(opts.Selector, opts.Pull)
 	if err != nil {
 		return err

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -202,6 +203,104 @@ func TestCommentsReplyCommandWithoutReviewID(t *testing.T) {
 	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
 	require.Len(t, payload, 1)
 	assert.Equal(t, "PRRC_reply", payload["comment_node_id"])
+}
+
+func TestCommentsReplyCommandWithBodyFile(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	dir := t.TempDir()
+	bodyPath := filepath.Join(dir, "body.txt")
+	require.NoError(t, os.WriteFile(bodyPath, []byte("from file"), 0600))
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		switch {
+		case strings.Contains(query, "AddPullRequestReviewThreadReply"):
+			input, ok := variables["input"].(map[string]interface{})
+			require.True(t, ok)
+			require.Equal(t, "from file", input["body"])
+
+			payload := map[string]interface{}{
+				"addPullRequestReviewThreadReply": map[string]interface{}{
+					"comment": map[string]interface{}{
+						"id":          "PRRC_reply",
+						"body":        "from file",
+						"publishedAt": "2025-12-03T10:00:00Z",
+						"author":      map[string]interface{}{"login": "octocat"},
+					},
+				},
+			}
+			return assignJSON(result, payload)
+		case strings.Contains(query, "PullRequestReviewCommentDetails"):
+			payload := map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":                "PRRC_reply",
+					"databaseId":        nil,
+					"body":              "from file",
+					"diffHunk":          "",
+					"path":              "",
+					"url":               "https://example.com/comment",
+					"createdAt":         "2025-12-03T10:00:00Z",
+					"updatedAt":         "2025-12-03T10:05:00Z",
+					"author":            map[string]interface{}{"login": "octocat"},
+					"pullRequestReview": nil,
+					"replyTo":           nil,
+				},
+			}
+			return assignJSON(result, payload)
+		case strings.Contains(query, "PullRequestReviewThreadDetails"):
+			payload := map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":         "PRRT_thread",
+					"isResolved": false,
+					"isOutdated": false,
+				},
+			}
+			return assignJSON(result, payload)
+		default:
+			t.Fatalf("unexpected query: %s", query)
+			return nil
+		}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body-file", bodyPath, "--repo", "octo/demo", "7"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	assert.Equal(t, "PRRC_reply", payload["comment_node_id"])
+}
+
+func TestCommentsReplyCommandBodyAndBodyFileMutuallyExclusive(t *testing.T) {
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--body", "text", "--body-file", "file.txt", "--repo", "octo/demo", "7"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "body")
+}
+
+func TestCommentsReplyCommandRequiresBodyOrBodyFile(t *testing.T) {
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"comments", "reply", "--thread-id", "PRRT_thread", "--repo", "octo/demo", "7"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--body or --body-file is required")
 }
 
 func assignJSON(result interface{}, payload interface{}) error {

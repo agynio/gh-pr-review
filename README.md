@@ -64,6 +64,29 @@ The quickest path from opening a pending review to resolving threads:
      --line 42 \
      --body "nit: use helper" \
      -R owner/repo 42
+   ```
+
+   You can also read the body from a file with `--body-file`:
+
+   ```sh
+   gh pr-review review --add-comment \
+     --review-id PRR_kwDOAAABbcdEFG12 \
+     --path internal/service.go \
+     --line 42 \
+     --body-file comment.md \
+     -R owner/repo 42
+   ```
+
+   Or pipe content directly from stdin:
+
+   ```sh
+   echo "nit: use helper" | gh pr-review review --add-comment \
+     --review-id PRR_kwDOAAABbcdEFG12 \
+     --path internal/service.go \
+     --line 42 \
+     --body-file - \
+     -R owner/repo 42
+   ```
 
    {
      "id": "PRRT_kwDOAAABbcdEFG12",
@@ -212,6 +235,10 @@ For the full canonical response structure, see docs/SCHEMAS.md.
 | `--not_outdated` | Exclude threads marked as outdated. |
 | `--tail <n>` | Retain only the last `n` replies per thread (0 = all). The parent inline comment is always kept; only replies are trimmed. |
 | `--include-comment-node-id` | Add GraphQL comment node identifiers to parent comments and replies. |
+
+Commands that accept `--body` also support `--body-file <path>` to read body
+text from a file. Use `--body-file -` to read from stdin. The two flags are
+mutually exclusive.
 
 ### Examples
 
