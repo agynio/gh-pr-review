@@ -1,8 +1,8 @@
 # gh-pr-review
 [![Agyn badge](https://agyn.io/badges/badge_dark.svg)](http://agyn.io)
 
-`gh-pr-review` is a GitHub CLI extension that finally brings **inline PR review comments** to the terminal.  
-GitHub’s built-in `gh` tool does *not* show inline comments or review threads — but this extension does.
+`gh-pr-review` is a GitHub CLI extension that finally brings **inline PR review comments** and **thread inspection** to the terminal.  
+GitHub’s built-in `gh` tool does *not* show inline comments, review threads, or thread grouping — but this extension does.
 
 With `gh-pr-review`, you can:
 
@@ -10,6 +10,7 @@ With `gh-pr-review`, you can:
 - See **unresolved comments** during code review  
 - Reply to inline comments directly from the terminal  
 - Resolve review threads programmatically  
+- Group and inspect threads with the `threads view` subcommand  
 - Export structured output ideal for **LLMs and automated PR review agents**
 
 Designed for developers, DevOps teams, and AI systems that need **full pull request review context**, not just top-level comments.
@@ -18,6 +19,7 @@ Designed for developers, DevOps teams, and AI systems that need **full pull requ
 
 - [Quickstart](#quickstart)
 - [Review view](#review-view)
+- [Threads view](#threads-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
 - [Design for LLMs & Automated Agents](#design-for-llms--automated-agents)
@@ -239,6 +241,18 @@ gh pr-review comments reply 3 -R owner/repo \
   --body "Follow-up addressed in commit abc123"
 
 ```
+
+## Threads view
+
+`gh pr-review threads view` provides a grouped, high-level summary of all review threads in a pull request, including their resolution status, file/line context, and reply grouping. This is useful for quickly auditing unresolved feedback, grouping threads by file, or summarizing review activity for LLMs and automation.
+
+**Example:**
+
+```sh
+gh pr-review threads view PRRT_XXXXXXX [PRRT_XXXXXXX...]
+```
+
+See [docs/USAGE.md](USAGE#threads-view) for full details, options, and output examples.
 
 ## Backend policy
 

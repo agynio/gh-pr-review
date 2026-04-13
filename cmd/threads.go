@@ -20,8 +20,33 @@ func newThreadsCommand() *cobra.Command {
 	cmd.AddCommand(newThreadsListCommand())
 	cmd.AddCommand(newThreadsResolveCommand())
 	cmd.AddCommand(newThreadsUnresolveCommand())
+	cmd.AddCommand(newThreadsViewCommand())
 
 	return cmd
+}
+
+// threads view [<thread-id> ...]
+func newThreadsViewCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "view <thread-id> [<thread-id> ...]",
+		Short: "View one or more review threads with comments",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runThreadsView(cmd, args)
+		},
+	}
+	return cmd
+}
+
+func runThreadsView(cmd *cobra.Command, threadIDs []string) error {
+	// Use the default API client (host from env or default)
+	hostEnv := os.Getenv("GH_HOST")
+	service := threads.NewService(apiClientFactory(hostEnv))
+	threadsWithComments, err := service.GetThreadsByID(threadIDs)
+	if err != nil {
+		return err
+	}
+	return encodeJSON(cmd, threadsWithComments)
 }
 
 func newThreadsListCommand() *cobra.Command {

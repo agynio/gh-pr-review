@@ -216,6 +216,8 @@ func parseState(raw string) (State, bool) {
 		return StateCommented, true
 	case string(StateDismissed):
 		return StateDismissed, true
+	case string(StatePending):
+		return StatePending, true
 	default:
 		return "", false
 	}

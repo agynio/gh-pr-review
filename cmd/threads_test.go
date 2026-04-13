@@ -228,3 +228,99 @@ func TestThreadsResolveRequiresThreadID(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--thread-id is required")
 }
+
+func TestThreadsViewCommand_SingleAndMultiple(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		// Simulate the threadWithCommentsQuery for two thread IDs
+		id, _ := variables["id"].(string)
+		switch id {
+		case "T1":
+			payload := map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":         "T1",
+					"isResolved": false,
+					"isOutdated": false,
+					"path":       "foo.go",
+					"line":       10,
+					"comments": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{"id": "C1", "body": "First comment", "author": map[string]interface{}{"login": "alice"}, "createdAt": time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC), "updatedAt": time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)},
+						},
+					},
+				},
+			}
+			return assignJSON(result, payload)
+		case "T2":
+			payload := map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":         "T2",
+					"isResolved": true,
+					"isOutdated": true,
+					"path":       "bar.go",
+					"line":       20,
+					"comments": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{"id": "C2", "body": "Second comment", "author": map[string]interface{}{"login": "bob"}, "createdAt": time.Date(2025, 2, 2, 11, 0, 0, 0, time.UTC), "updatedAt": time.Date(2025, 2, 2, 11, 0, 0, 0, time.UTC)},
+						},
+					},
+				},
+			}
+			return assignJSON(result, payload)
+		default:
+			return errors.New("thread not found")
+		}
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"threads", "view", "T1", "T2"})
+
+	err := root.Execute()
+	require.NoError(t, err)
+	assert.Empty(t, stderr.String())
+
+	var payload []map[string]interface{}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &payload))
+	require.Len(t, payload, 2)
+	assert.Equal(t, "T1", payload[0]["threadId"])
+	assert.Equal(t, "foo.go", payload[0]["path"])
+	assert.Equal(t, false, payload[0]["isResolved"])
+	assert.Equal(t, "T2", payload[1]["threadId"])
+	assert.Equal(t, "bar.go", payload[1]["path"])
+	assert.Equal(t, true, payload[1]["isResolved"])
+	// Comments structure
+	comments, ok := payload[0]["comments"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, comments, 1)
+	c0 := comments[0].(map[string]interface{})
+	assert.Equal(t, "C1", c0["id"])
+	assert.Equal(t, "First comment", c0["body"])
+}
+
+func TestThreadsViewCommand_ThreadNotFound(t *testing.T) {
+	originalFactory := apiClientFactory
+	defer func() { apiClientFactory = originalFactory }()
+
+	fake := &commandFakeAPI{}
+	fake.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		return errors.New("thread not found")
+	}
+	apiClientFactory = func(host string) ghcli.API { return fake }
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"threads", "view", "T404"})
+
+	err := root.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "thread not found")
+}
