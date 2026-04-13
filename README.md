@@ -17,6 +17,7 @@ Designed for developers, DevOps teams, and AI systems that need **full pull requ
 **Blog post:** [gh-pr-review: LLM-friendly PR review workflows in your CLI](https://agyn.io/blog/gh-pr-review-cli-agent-workflows) — explains the motivation, design principles, and CLI + JSON output examples.  
 
 - [Quickstart](#quickstart)
+- [Watch for comments](#watch-for-comments)
 - [Review view](#review-view)
 - [Backend policy](#backend-policy)
 - [Additional docs](#additional-docs)
@@ -160,14 +161,68 @@ The quickest path from opening a pending review to resolving threads:
    ]
    ```
 
-   ```sh
-   gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
-   
-   {
-     "thread_node_id": "R_ywDoABC123",
-     "is_resolved": true
-   }
-   ```
+    ```sh
+    gh pr-review threads resolve --thread-id R_ywDoABC123 -R owner/repo 42
+    
+    {
+      "thread_node_id": "R_ywDoABC123",
+      "is_resolved": true
+    }
+    ```
+
+## Watch for comments
+
+`gh pr-review watch` monitors a pull request for new comments and exits when
+they arrive. This is useful for automation workflows that need to wait for
+human feedback before proceeding.
+
+```sh
+gh pr-review watch -R owner/repo 42
+```
+
+The command polls for new review comments and issue comments at a configurable
+interval (default 10s). When new comments are detected, it debounces for 5
+seconds to collect any additional comments that arrive in quick succession
+(e.g., from a batch of commits being reviewed together).
+
+### Options
+
+| Flag | Default | Purpose |
+| --- | --- | --- |
+| `-i, --interval` | 10 | Polling interval in seconds |
+| `--debounce` | 5 | Debounce duration in seconds |
+| `--timeout` | 3600 | Maximum watch duration in seconds (1 hour) |
+| `--issue-comments` | true | Include issue comments (not just review comments) |
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | New comments found |
+| 1 | Error occurred |
+| 2 | Timed out with no new comments |
+
+### Example output
+
+```json
+{
+  "comments": [
+    {
+      "id": "review-123456789",
+      "node_id": "PRRC_kwDOAAABbhi7890",
+      "body": "Please add tests for this edge case",
+      "author_login": "reviewer",
+      "created_at": "2025-01-12T10:30:00Z",
+      "path": "internal/service.go",
+      "line": 42,
+      "type": "review",
+      "thread_id": "PRRT_kwDOAAABbFg12345"
+    }
+  ],
+  "timed_out": false,
+  "watched_ms": 15234
+}
+```
 
 ## Review view
 
@@ -253,6 +308,7 @@ Each command binds to a single GitHub backend—there are no runtime fallbacks.
 | `comments reply` | GraphQL | Replies via `addPullRequestReviewThreadReply`; supply `--review-id` when responding from a pending review. |
 | `threads list` | GraphQL | Enumerates review threads for the pull request. |
 | `threads resolve` / `unresolve` | GraphQL | Mutates thread resolution via `resolveReviewThread` / `unresolveReviewThread`; supply GraphQL thread node IDs (`PRRT_…`). |
+| `watch` | GraphQL | Polls for new comments via `reviewThreads` and `comments` queries; exits when new comments arrive or timeout is reached. |
 
 
 ## Additional docs
