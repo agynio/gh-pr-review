@@ -56,12 +56,29 @@ func BuildReport(reviews []Review, threads []Thread, filters FilterOptions) Repo
 		return Report{Reviews: []ReportReview{}}
 	}
 
+	var authorFilter string
+	if filters.Author != "" {
+		authorFilter = strings.ToLower(filters.Author)
+	}
+
 	for _, thread := range threads {
-		if filters.RequireUnresolved && thread.IsResolved {
+		if !filters.IncludeResolved && filters.RequireUnresolved && thread.IsResolved {
 			continue
 		}
 		if filters.RequireNotOutdated && thread.IsOutdated {
 			continue
+		}
+		if authorFilter != "" {
+			matched := false
+			for _, comment := range thread.Comments {
+				if strings.Contains(strings.ToLower(comment.AuthorLogin), authorFilter) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
 		}
 
 		var parent *ThreadComment

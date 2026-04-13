@@ -255,3 +255,122 @@ func mustFindComment(comments []report.ReportComment, threadID string) report.Re
 func strPtr(v string) *string {
 	return &v
 }
+
+// ─── Tests for --author filter ──────────────────────────────────────────────
+
+func TestBuildReportAuthorFilterIncludesMatchingThreads(t *testing.T) {
+	reviews := []report.Review{
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "coderabbitai", DatabaseID: 1},
+	}
+	threads := []report.Thread{
+		{
+			ID: "T1", IsResolved: false,
+			Comments: []report.ThreadComment{
+				{NodeID: "C1", DatabaseID: 101, Body: "rabbit comment", AuthorLogin: "coderabbitai", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+		{
+			ID: "T2", IsResolved: false,
+			Comments: []report.ThreadComment{
+				{NodeID: "C2", DatabaseID: 102, Body: "codex comment", AuthorLogin: "chatgpt-codex-connector", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+	}
+
+	result := report.BuildReport(reviews, threads, report.FilterOptions{Author: "chatgpt-codex-connector"})
+	totalComments := 0
+	for _, r := range result.Reviews {
+		totalComments += len(r.Comments)
+	}
+	if totalComments != 1 {
+		t.Errorf("expected 1 thread with matching author, got %d", totalComments)
+	}
+}
+
+func TestBuildReportAuthorFilterIsCaseInsensitive(t *testing.T) {
+	reviews := []report.Review{
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "CodeRabbitAI", DatabaseID: 1},
+	}
+	threads := []report.Thread{
+		{
+			ID: "T1", IsResolved: false,
+			Comments: []report.ThreadComment{
+				{NodeID: "C1", DatabaseID: 101, Body: "found a bug", AuthorLogin: "CodeRabbitAI", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+	}
+
+	result := report.BuildReport(reviews, threads, report.FilterOptions{Author: "coderabbitai"})
+	totalComments := 0
+	for _, r := range result.Reviews {
+		totalComments += len(r.Comments)
+	}
+	if totalComments != 1 {
+		t.Errorf("expected 1 thread (case-insensitive match), got %d", totalComments)
+	}
+}
+
+func TestBuildReportAuthorFilterMatchesSubstring(t *testing.T) {
+	reviews := []report.Review{
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "CodeRabbitAI", DatabaseID: 1},
+	}
+	threads := []report.Thread{
+		{
+			ID: "T1", IsResolved: false,
+			Comments: []report.ThreadComment{
+				{NodeID: "C1", DatabaseID: 101, Body: "found a bug", AuthorLogin: "chatgpt-codex-connector", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+	}
+
+	result := report.BuildReport(reviews, threads, report.FilterOptions{Author: "codex"})
+	totalComments := 0
+	for _, r := range result.Reviews {
+		totalComments += len(r.Comments)
+	}
+	if totalComments != 1 {
+		t.Fatalf("expected 1 thread with substring author match, got %d", totalComments)
+	}
+}
+
+// ─── Tests for --all (IncludeResolved) ──────────────────────────────────────
+
+func TestBuildReportIncludeResolvedShowsResolvedThreads(t *testing.T) {
+	reviews := []report.Review{
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "alice", DatabaseID: 1},
+	}
+	threads := []report.Thread{
+		{
+			ID: "T1", IsResolved: true,
+			Comments: []report.ThreadComment{
+				{NodeID: "C1", DatabaseID: 101, Body: "resolved thread", AuthorLogin: "alice", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+		{
+			ID: "T2", IsResolved: false,
+			Comments: []report.ThreadComment{
+				{NodeID: "C2", DatabaseID: 102, Body: "open thread", AuthorLogin: "alice", CreatedAt: time.Now(), ReviewDatabaseID: intPtr(1)},
+			},
+		},
+	}
+
+	// RequireUnresolved only → should get 1 (T2)
+	result := report.BuildReport(reviews, threads, report.FilterOptions{RequireUnresolved: true})
+	c1 := 0
+	for _, r := range result.Reviews {
+		c1 += len(r.Comments)
+	}
+	if c1 != 1 {
+		t.Errorf("RequireUnresolved: expected 1 thread, got %d", c1)
+	}
+
+	// RequireUnresolved + IncludeResolved → should get 2 (both)
+	result2 := report.BuildReport(reviews, threads, report.FilterOptions{RequireUnresolved: true, IncludeResolved: true})
+	c2 := 0
+	for _, r := range result2.Reviews {
+		c2 += len(r.Comments)
+	}
+	if c2 != 2 {
+		t.Errorf("IncludeResolved override: expected 2 threads, got %d", c2)
+	}
+}

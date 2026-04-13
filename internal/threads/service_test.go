@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -412,10 +413,644 @@ func TestUnresolveMutatesThread(t *testing.T) {
 	assert.Equal(t, "T9", res.ThreadNodeID)
 }
 
+// ─── Tests for --commit (reply-then-resolve) ────────────────────────────────
+
+func TestResolveWithCommitPostsReplyThenResolves(t *testing.T) {
+	svc := &Service{}
+	var calls []string
+	var replyBody string
+
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T1",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				}
+				return assign(result, payload)
+			case addThreadReplyMutation:
+				calls = append(calls, "reply")
+				replyBody = variables["body"].(string)
+				return nil
+			case resolveThreadMutation:
+				calls = append(calls, "resolve")
+				payload := map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{
+							"id":         "T1",
+							"isResolved": true,
+						},
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	_, err := svc.Resolve(resolver.Identity{Owner: "o", Repo: "r", Number: 1}, ActionOptions{
+		ThreadID: "T1",
+		Commit:   "abc123",
+	})
+	require.NoError(t, err)
+	// Must call reply BEFORE resolve — order matters
+	require.Equal(t, []string{"reply", "resolve"}, calls)
+	require.Equal(t, "Addressed in [`abc123`](https://github.com/o/r/commit/abc123)", replyBody)
+}
+
+func TestResolveWithCommitBailsOnReplyFailure(t *testing.T) {
+	svc := &Service{}
+	resolveCalled := false
+
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T1",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				}
+				return assign(result, payload)
+			case addThreadReplyMutation:
+				return errors.New("reply failed: forbidden")
+			case resolveThreadMutation:
+				resolveCalled = true
+				return nil
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	_, err := svc.Resolve(resolver.Identity{Owner: "o", Repo: "r", Number: 1}, ActionOptions{
+		ThreadID: "T1",
+		Commit:   "abc123",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "post commit reply")
+	require.False(t, resolveCalled, "resolve must NOT be called when reply fails")
+}
+
+func TestResolveWithoutCommitSkipsReply(t *testing.T) {
+	svc := &Service{}
+	var calls []string
+
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case threadDetailsQuery:
+				calls = append(calls, "details")
+				payload := map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T1",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				}
+				return assign(result, payload)
+			case resolveThreadMutation:
+				calls = append(calls, "resolve")
+				payload := map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{
+							"id":         "T1",
+							"isResolved": true,
+						},
+					},
+				}
+				return assign(result, payload)
+			default:
+				return errors.New("unexpected query: " + query[:40])
+			}
+		},
+	}
+
+	_, err := svc.Resolve(resolver.Identity{Owner: "o", Repo: "r", Number: 1}, ActionOptions{
+		ThreadID: "T1",
+		Commit:   "", // no commit
+	})
+	require.NoError(t, err)
+	// Should be details → resolve, NO reply call
+	require.Equal(t, []string{"details", "resolve"}, calls)
+}
+
 func assign(dst interface{}, payload interface{}) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	return json.Unmarshal(data, dst)
+}
+
+// ─── F2: ResolveAll tests ─────────────────────────────────────────────────────
+
+func TestResolveAllResolvesUnresolvedThreads(t *testing.T) {
+	svc := &Service{}
+	var resolvedIDs []string
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 7, "PR_bulk", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case listThreadsQuery:
+				ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "TA", "isResolved": false, "isOutdated": false, "path": "a.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 1},
+									}},
+								},
+								{
+									"id": "TB", "isResolved": false, "isOutdated": false, "path": "b.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 2},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case threadDetailsQuery:
+				threadID := variables["id"].(string)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 threadID,
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				})
+			case resolveThreadMutation:
+				threadID := variables["threadId"].(string)
+				resolvedIDs = append(resolvedIDs, threadID)
+				return assign(result, map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{"id": threadID, "isResolved": true},
+					},
+				})
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 7}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{Unresolved: true})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.ElementsMatch(t, []string{"TA", "TB"}, resolvedIDs)
+	for _, r := range results {
+		assert.True(t, r.IsResolved)
+	}
+}
+
+func TestResolveAllContinuesOnError(t *testing.T) {
+	svc := &Service{}
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 8, "PR_err", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case listThreadsQuery:
+				ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "T_fail", "isResolved": false, "isOutdated": false, "path": "x.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 10},
+									}},
+								},
+								{
+									"id": "T_ok", "isResolved": false, "isOutdated": false, "path": "y.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 11},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case threadDetailsQuery:
+				threadID := variables["id"].(string)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 threadID,
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+					},
+				})
+			case resolveThreadMutation:
+				threadID := variables["threadId"].(string)
+				if threadID == "T_fail" {
+					return errors.New("server error")
+				}
+				return assign(result, map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{"id": threadID, "isResolved": true},
+					},
+				})
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 8}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{Unresolved: true})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	byID := map[string]ActionResult{}
+	for _, r := range results {
+		byID[r.ThreadNodeID] = r
+	}
+	assert.False(t, byID["T_fail"].IsResolved)
+	assert.True(t, byID["T_ok"].IsResolved)
+}
+
+func TestResolveAllIncludeResolvedStillPostsCommitReply(t *testing.T) {
+	svc := &Service{}
+	var calls []string
+	var replyBody string
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 9, "PR_resolved", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch query {
+			case listThreadsQuery:
+				ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "T_done", "isResolved": true, "isOutdated": false, "path": "done.go",
+									"viewerCanResolve": false, "viewerCanUnresolve": true,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 42},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case threadDetailsQuery:
+				calls = append(calls, "details")
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T_done",
+						"isResolved":         true,
+						"viewerCanResolve":   false,
+						"viewerCanUnresolve": true,
+						"comments": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{"id": "C_done"},
+							},
+						},
+					},
+				})
+			case addThreadReplyMutation:
+				calls = append(calls, "reply")
+				replyBody, _ = variables["body"].(string)
+				return nil
+			case resolveThreadMutation:
+				calls = append(calls, "resolve")
+				return nil
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Host: "github.com", Owner: "octo", Repo: "demo", Number: 9}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{
+		Commit:     "abc1234",
+		Unresolved: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "T_done", results[0].ThreadNodeID)
+	assert.True(t, results[0].IsResolved)
+	assert.Equal(t, []string{"details", "reply"}, calls)
+	assert.Contains(t, replyBody, "abc1234")
+}
+
+// ─── F3: --since filter test ──────────────────────────────────────────────────
+
+func TestServiceListSinceFiltersOldThreads(t *testing.T) {
+	svc := &Service{}
+
+	old := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	recent := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 9, "PR_since", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"reviewThreads": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{
+								"id": "T_old", "isResolved": false, "isOutdated": false, "path": "old.go",
+								"viewerCanResolve": false, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": old, "databaseId": 1},
+								}},
+							},
+							{
+								"id": "T_recent", "isResolved": false, "isOutdated": false, "path": "new.go",
+								"viewerCanResolve": false, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": recent, "databaseId": 2},
+								}},
+							},
+						},
+						"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+					},
+				},
+			})
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 9}
+	results, err := svc.List(identity, ListOptions{Since: cutoff})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "T_recent", results[0].ThreadID)
+}
+
+func TestResolveIncludesReplyBodyWhenCommitProvided(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		switch {
+		case strings.Contains(query, "ThreadDetails"):
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":                 "T_commit",
+					"isResolved":         false,
+					"viewerCanResolve":   true,
+					"viewerCanUnresolve": false,
+				},
+			})
+		case strings.Contains(query, "addPullRequestReviewThreadReply"):
+			// reply mutation — result is nil, just succeed
+			return nil
+		case strings.Contains(query, "resolveReviewThread"):
+			return assign(result, map[string]interface{}{
+				"resolveReviewThread": map[string]interface{}{
+					"thread": map[string]interface{}{
+						"id":         "T_commit",
+						"isResolved": true,
+					},
+				},
+			})
+		default:
+			return errors.New("unexpected query")
+		}
+	}
+
+	svc := NewService(api)
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 1}
+	result, err := svc.Resolve(identity, ActionOptions{ThreadID: "T_commit", Commit: "abc1234"})
+	require.NoError(t, err)
+	assert.Equal(t, "T_commit", result.ThreadNodeID)
+	assert.True(t, result.IsResolved)
+	assert.Contains(t, result.ReplyBody, "abc1234")
+	assert.Contains(t, result.ReplyBody, "octo/demo/commit/abc1234")
+}
+
+func TestResolveNoReplyBodyWhenNoCommit(t *testing.T) {
+	api := &fakeAPI{}
+	api.graphqlFunc = func(query string, variables map[string]interface{}, result interface{}) error {
+		switch {
+		case strings.Contains(query, "ThreadDetails"):
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"id":                 "T_no_commit",
+					"isResolved":         false,
+					"viewerCanResolve":   true,
+					"viewerCanUnresolve": false,
+				},
+			})
+		case strings.Contains(query, "resolveReviewThread"):
+			return assign(result, map[string]interface{}{
+				"resolveReviewThread": map[string]interface{}{
+					"thread": map[string]interface{}{
+						"id":         "T_no_commit",
+						"isResolved": true,
+					},
+				},
+			})
+		default:
+			return errors.New("unexpected query")
+		}
+	}
+
+	svc := NewService(api)
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 1}
+	result, err := svc.Resolve(identity, ActionOptions{ThreadID: "T_no_commit"})
+	require.NoError(t, err)
+	assert.Empty(t, result.ReplyBody)
+}
+
+// ─── Author substring matching tests ─────────────────────────────────────────
+
+func TestServiceListAuthorSubstringMatch(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 9, "PR_sub", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			require.Equal(t, listThreadsQuery, query)
+			ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			return assign(result, map[string]interface{}{
+				"node": map[string]interface{}{
+					"reviewThreads": map[string]interface{}{
+						"nodes": []map[string]interface{}{
+							{
+								"id": "T_rabbit", "isResolved": false, "isOutdated": false, "path": "a.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 1, "body": "nitpick", "author": map[string]interface{}{"login": "coderabbitai"}},
+								}},
+							},
+							{
+								"id": "T_codex", "isResolved": false, "isOutdated": false, "path": "b.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 2, "body": "bug", "author": map[string]interface{}{"login": "chatgpt-codex-connector"}},
+								}},
+							},
+							{
+								"id": "T_human", "isResolved": false, "isOutdated": false, "path": "c.go",
+								"viewerCanResolve": true, "viewerCanUnresolve": false,
+								"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+									{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 3, "body": "looks good", "author": map[string]interface{}{"login": "reviewer42"}},
+								}},
+							},
+						},
+						"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+					},
+				},
+			})
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 9}
+
+	// Substring "codex" should match "chatgpt-codex-connector"
+	t.Run("substring matches partial login", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "codex"})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "T_codex", results[0].ThreadID)
+	})
+
+	// Substring "rabbit" should match "coderabbitai"
+	t.Run("substring matches coderabbitai", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "rabbit"})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "T_rabbit", results[0].ThreadID)
+	})
+
+	// Substring "CODEX" should match case-insensitively
+	t.Run("substring is case insensitive", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "CODEX"})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+		assert.Equal(t, "T_codex", results[0].ThreadID)
+	})
+
+	// Substring "nobody" should match nothing
+	t.Run("non-matching substring returns empty", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{Author: "nobody"})
+		require.NoError(t, err)
+		assert.Len(t, results, 0)
+	})
+
+	// No author filter returns all
+	t.Run("empty author returns all threads", func(t *testing.T) {
+		results, err := svc.List(identity, ListOptions{})
+		require.NoError(t, err)
+		assert.Len(t, results, 3)
+	})
+}
+
+func TestResolveAllErrorFieldPopulated(t *testing.T) {
+	svc := &Service{}
+	svc.API = &fakeAPI{
+		restFunc: restStub(t, "octo", "demo", "octo/demo", 10, "PR_errfield", nil),
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			switch query {
+			case listThreadsQuery:
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"reviewThreads": map[string]interface{}{
+							"nodes": []map[string]interface{}{
+								{
+									"id": "T_ok", "isResolved": false, "isOutdated": false, "path": "x.go",
+									"viewerCanResolve": true, "viewerCanUnresolve": false,
+									"comments": map[string]interface{}{"nodes": []map[string]interface{}{
+										{"viewerDidAuthor": false, "updatedAt": ts, "databaseId": 1},
+									}},
+								},
+							},
+							"pageInfo": map[string]interface{}{"hasNextPage": false, "endCursor": ""},
+						},
+					},
+				})
+			case threadDetailsQuery:
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id": "T_ok", "isResolved": false,
+						"viewerCanResolve": false, "viewerCanUnresolve": false,
+					},
+				})
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	identity := resolver.Identity{Owner: "octo", Repo: "demo", Number: 10}
+	results, err := svc.ResolveAll(identity, ResolveAllOptions{Unresolved: true})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.False(t, results[0].IsResolved)
+	assert.Contains(t, results[0].Error, "cannot resolve")
+}
+func TestResolveWithReactSkipsReactionWhenNoComments(t *testing.T) {
+	svc := &Service{}
+	resolveCalled := false
+	reactCalled := false
+	svc.API = &fakeAPI{
+		graphqlFunc: func(query string, variables map[string]interface{}, result interface{}) error {
+			switch {
+			case query == threadDetailsQuery:
+				return assign(result, map[string]interface{}{
+					"node": map[string]interface{}{
+						"id":                 "T_empty",
+						"isResolved":         false,
+						"viewerCanResolve":   true,
+						"viewerCanUnresolve": false,
+						"comments": map[string]interface{}{
+							"nodes": []map[string]interface{}{},
+						},
+					},
+				})
+			case query == resolveThreadMutation:
+				resolveCalled = true
+				return assign(result, map[string]interface{}{
+					"resolveReviewThread": map[string]interface{}{
+						"thread": map[string]interface{}{
+							"id":         "T_empty",
+							"isResolved": true,
+						},
+					},
+				})
+			case strings.Contains(query, "addReaction"):
+				reactCalled = true
+				return nil
+			default:
+				return errors.New("unexpected query")
+			}
+		},
+	}
+
+	result, err := svc.Resolve(resolver.Identity{Host: "github.com"}, ActionOptions{
+		ThreadID: "T_empty",
+		React:    "THUMBS_UP",
+	})
+	require.NoError(t, err)
+	assert.True(t, resolveCalled, "resolve mutation should be called")
+	assert.False(t, reactCalled, "reaction should NOT be called when thread has no comments")
+	assert.True(t, result.IsResolved)
 }

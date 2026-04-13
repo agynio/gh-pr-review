@@ -30,6 +30,8 @@ type Options struct {
 	RequireNotOutdated   bool
 	TailReplies          int
 	IncludeCommentNodeID bool
+	Author               string
+	IncludeResolved      bool
 }
 
 // NewService constructs a report service using the provided GraphQL API client.
@@ -201,6 +203,8 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 		RequireNotOutdated:   opts.RequireNotOutdated,
 		TailReplies:          opts.TailReplies,
 		IncludeCommentNodeID: opts.IncludeCommentNodeID,
+		Author:               opts.Author,
+		IncludeResolved:      opts.IncludeResolved,
 	}
 
 	return BuildReport(reviews, threads, filters), nil
