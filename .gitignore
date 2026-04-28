@@ -7,3 +7,4 @@ TASKS.md
 # Go binaries
 gh-pr-review
 *.exe
+.pi/

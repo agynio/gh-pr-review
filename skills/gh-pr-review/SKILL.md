@@ -280,11 +280,25 @@ Example output structure:
 gh pr-review review view --unresolved --not_outdated -R owner/repo --pr $(gh pr view --json number -q .number)
 ```
 
+### Claim a Thread Before Working on It
+
+**IMPORTANT**: Before addressing any thread, add an 👀 reaction to the FIRST comment in the thread to claim it. This prevents multiple agents from working on the same thread simultaneously.
+
+```sh
+# Add 👀 reaction to claim the thread
+gh pr-review react <comment_node_id> --type eyes
+```
+
+Then address the thread, reply, and resolve. If you cannot address the thread (e.g., it needs human input), reply and leave it unresolved.
+
+**Note:** Adding a reaction (👍, 👀, etc.) does NOT resolve a thread. To resolve, use `gh pr-review threads resolve`.
+
 ### Reply to All Unresolved Comments
 
 1. Get unresolved threads: `gh pr-review threads list --unresolved -R owner/repo <pr>`
 2. For each thread_id, reply: `gh pr-review comments reply <pr> -R owner/repo --thread-id <id> --body "..."`
-3. Optionally resolve: `gh pr-review threads resolve <pr> -R owner/repo --thread-id <id>`
+3. Resolve the thread: `gh pr-review threads resolve <pr> -R owner/repo --thread-id <id>`
+   (If the thread is non-actionable, resolve it with a brief reply explaining why it's being dismissed.)
 
 ### Wait for PR Attention
 
