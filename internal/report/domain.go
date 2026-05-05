@@ -32,7 +32,7 @@ type Review struct {
 	Body        *string
 	SubmittedAt *time.Time
 	AuthorLogin string
-	DatabaseID  int
+	DatabaseID  *int
 }
 
 // Thread captures a review thread and its constituent comments.

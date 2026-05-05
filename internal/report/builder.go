@@ -48,7 +48,9 @@ func BuildReport(reviews []Review, threads []Thread, filters FilterOptions) Repo
 			AuthorLogin: review.AuthorLogin,
 		}
 
-		reviewIndexByID[review.DatabaseID] = len(reportReviews)
+		if review.DatabaseID != nil {
+			reviewIndexByID[*review.DatabaseID] = len(reportReviews)
+		}
 		reportReviews = append(reportReviews, rep)
 	}
 

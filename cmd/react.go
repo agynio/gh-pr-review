@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/agynio/gh-pr-review/internal/reactions"
+	"github.com/agynio/gh-pr-review/internal/resolver"
 )
 
 func newReactCommand() *cobra.Command {
@@ -37,7 +38,7 @@ Valid reaction types: ` + strings.Join(reactions.ValidReactionNames(), ", "),
 				return fmt.Errorf("--type: %w", err)
 			}
 
-			api := apiClientFactory(os.Getenv("GH_HOST"))
+			api := apiClientFactory(resolver.SanitizeHost(os.Getenv("GH_HOST")))
 			if err := reactions.React(api, nodeID, reactionType); err != nil {
 				return err
 			}

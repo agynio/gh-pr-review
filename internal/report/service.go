@@ -132,7 +132,8 @@ func (s *Service) Fetch(pr resolver.Identity, opts Options) (Report, error) {
 		}
 		// PENDING reviews don't have databaseId (ephemeral, no submittedAt)
 		if node.DatabaseID != nil {
-			review.DatabaseID = *node.DatabaseID
+			id := *node.DatabaseID
+			review.DatabaseID = &id
 		}
 		if node.SubmittedAt != nil && strings.TrimSpace(*node.SubmittedAt) != "" {
 			parsed, err := time.Parse(time.RFC3339, *node.SubmittedAt)

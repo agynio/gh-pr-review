@@ -54,7 +54,7 @@ func NormalizeSelector(selector string, prFlag int) (string, error) {
 func Resolve(selector, repoFlag, host string) (Identity, error) {
 	selector = strings.TrimSpace(selector)
 	repoFlag = strings.TrimSpace(repoFlag)
-	host = sanitizeHost(host)
+	host = SanitizeHost(host)
 
 	if selector == "" {
 		return Identity{}, errors.New("empty selector")
@@ -67,7 +67,7 @@ func Resolve(selector, repoFlag, host string) (Identity, error) {
 	if n, err := strconv.Atoi(selector); err == nil && n > 0 {
 		owner, repo, err := splitRepo(repoFlag)
 		if err != nil {
-			return Identity{}, err
+			return Identity{}, fmt.Errorf("--repo: %w", err)
 		}
 		return Identity{Owner: owner, Repo: repo, Host: host, Number: n}, nil
 	}
@@ -91,7 +91,7 @@ func parsePullURL(raw string) (Identity, error) {
 	return Identity{
 		Owner:  matches[1],
 		Repo:   matches[2],
-		Host:   sanitizeHost(u.Host),
+		Host:   SanitizeHost(u.Host),
 		Number: number,
 	}, nil
 }
@@ -129,7 +129,9 @@ func splitRepo(repoFlag string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-func sanitizeHost(raw string) string {
+// SanitizeHost normalizes a host string by stripping scheme, path, and port.
+// Returns "github.com" if the result is empty.
+func SanitizeHost(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "github.com"

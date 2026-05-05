@@ -19,14 +19,14 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 			Body:        &reviewBody,
 			SubmittedAt: &submittedAt,
 			AuthorLogin: "alice",
-			DatabaseID:  101,
+			DatabaseID:  intPtr(101),
 		},
 		{
 			ID:          "R2",
 			State:       report.StateCommented,
 			Body:        strPtr(""),
 			AuthorLogin: "bob",
-			DatabaseID:  202,
+			DatabaseID:  intPtr(202),
 		},
 	}
 
@@ -173,8 +173,8 @@ func TestBuildReportAggregatesThreads(t *testing.T) {
 
 func TestBuildReportFilterOptions(t *testing.T) {
 	reviews := []report.Review{
-		{ID: "R1", State: report.StateApproved, AuthorLogin: "alice", DatabaseID: 1},
-		{ID: "R2", State: report.StateChangesRequested, AuthorLogin: "bob", DatabaseID: 2},
+		{ID: "R1", State: report.StateApproved, AuthorLogin: "alice", DatabaseID: intPtr(1)},
+		{ID: "R2", State: report.StateChangesRequested, AuthorLogin: "bob", DatabaseID: intPtr(2)},
 	}
 
 	threads := []report.Thread{
@@ -260,7 +260,7 @@ func strPtr(v string) *string {
 
 func TestBuildReportAuthorFilterIncludesMatchingThreads(t *testing.T) {
 	reviews := []report.Review{
-		{ID: "R1", State: report.StateCommented, AuthorLogin: "coderabbitai", DatabaseID: 1},
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "coderabbitai", DatabaseID: intPtr(1)},
 	}
 	threads := []report.Thread{
 		{
@@ -289,7 +289,7 @@ func TestBuildReportAuthorFilterIncludesMatchingThreads(t *testing.T) {
 
 func TestBuildReportAuthorFilterIsCaseInsensitive(t *testing.T) {
 	reviews := []report.Review{
-		{ID: "R1", State: report.StateCommented, AuthorLogin: "CodeRabbitAI", DatabaseID: 1},
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "CodeRabbitAI", DatabaseID: intPtr(1)},
 	}
 	threads := []report.Thread{
 		{
@@ -314,7 +314,7 @@ func TestBuildReportAuthorFilterIsCaseInsensitive(t *testing.T) {
 
 func TestBuildReportIncludeResolvedShowsResolvedThreads(t *testing.T) {
 	reviews := []report.Review{
-		{ID: "R1", State: report.StateCommented, AuthorLogin: "alice", DatabaseID: 1},
+		{ID: "R1", State: report.StateCommented, AuthorLogin: "alice", DatabaseID: intPtr(1)},
 	}
 	threads := []report.Thread{
 		{
